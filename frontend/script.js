@@ -16,6 +16,7 @@
   const showYellowEl = document.getElementById('showYellow');
   const sampleFpsEl = document.getElementById('sampleFps');
   const methodsEls = document.querySelectorAll('.method');
+  const blueMaxThreshEl = document.getElementById('blue_max_thresh');
   // parameter inputs
   const p = {
     smooth_k: document.getElementById('p_smooth_k'),
@@ -34,6 +35,7 @@
   let dragging = false; let start = null; let rectPx = null;
   let analyzedXs = []; let analyzedEvents = []; let analyzedSeries = []; let analyzedBaseline = 0;
   let shadedIntervals = []; // [{start, end}] regions to shade on timeline
+  let lastBlueJudge = null;
   const timelineState = { fullMin: 0, fullMax: 0, min: 0, max: 0 };
   let zoom = 1.0;
   let panX = 0, panY = 0; // videoWrap translation in panel pixels
@@ -47,7 +49,7 @@
     if (!file) return;
     const url = URL.createObjectURL(file);
     video.src = url;
-    analyzeBtn.disabled = true;
+    analyzeBtn.disabled = !(roi && roi.w > 0 && roi.h > 0);
     resultText.textContent = '加载视频，选择ROI后点击分析…';
   });
 
@@ -76,7 +78,7 @@
     resizeOverlay();
   }
   new ResizeObserver(() => { autoFitHeight(); }).observe(document.querySelector('.video-box'));
-  video.addEventListener('loadedmetadata', () => { autoFitHeight(); });
+  video.addEventListener('loadedmetadata', () => { autoFitHeight(); if (applyExistingRoiToOverlay()) analyzeBtn.disabled = false; });
   window.addEventListener('resize', () => { autoFitHeight(); });
 
   function drawOverlay(){
@@ -161,7 +163,7 @@
     if (!roi){ alert('请在视频上框选ROI'); return; }
     resultText.textContent = '分析中…';
     statusEl.textContent = '上传并调用后端接口 /analyze';
-    analyzeBtn.disabled = true;
+    analyzeBtn.disabled = !(roi && roi.w > 0 && roi.h > 0);
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -235,6 +237,7 @@ function renderResult(data){
   timelineState.max = seriesEnd;
   renderTimeline();
   renderEventsTable(events);
+  updateBlueJudge();
 }
 
 // thresholds helper (kept close to shading logic)
@@ -273,7 +276,7 @@ function getThresholds(){
       }
     }
     if (inSeg){ intervals.push({ start: startT, end: xs[xs.length-1] }); }
-    shadedIntervals = intervals;
+    shadedIntervals = intervals; updateBlueJudge();
   }
 
   function badge(label, ok){
@@ -383,6 +386,31 @@ function getThresholds(){
       if (ct>=minX && ct<=maxX){ ctx.fillStyle = '#60a5fa'; const x = x2px(ct); ctx.fillRect(x-1, 2, 2, H-4); }
     }
     // 不绘制左右角时间文本
+  }
+
+  // compute max of blue (d1) within shaded intervals and update indicator
+  function updateBlueJudge(){
+    const indicator = document.getElementById('blueJudge');
+    if (!indicator){ return; }
+    if (!analyzedSeries || !analyzedSeries.length || !analyzedXs || !analyzedXs.length || !shadedIntervals || !shadedIntervals.length){
+      indicator.textContent = 'X'; indicator.classList.remove('ok'); return;
+    }
+    const xs = analyzedXs;
+    const v = analyzedSeries.map(p=>p.roi);
+    // d1: current - historical mean
+    let acc=0; const d1=new Array(v.length).fill(0);
+    for(let i=0;i<v.length;i++){ if(i===0){ d1[i]=0; acc+=v[i]; continue; } const prevMean = acc / i; d1[i]=v[i]-prevMean; acc+=v[i]; }
+    let maxVal = -Infinity;
+    for(let i=0;i<xs.length;i++){
+      const t = xs[i];
+      const inside = shadedIntervals.some(seg => t>=seg.start && t<=seg.end);
+      if (inside){ if (isFinite(d1[i])) maxVal = Math.max(maxVal, d1[i]); }
+    }
+    const thr = Number((blueMaxThreshEl && blueMaxThreshEl.value) || 35);
+    const pass = isFinite(maxVal) && (maxVal > thr);
+    indicator.textContent = pass ? 'Y' : 'X';
+    indicator.classList.toggle('ok', !!pass);
+    lastBlueJudge = { maxVal, thr, pass };
   }
 
   // timeline interactions: click/scrub to seek, wheel to zoom, CTRL+drag to pan
@@ -662,3 +690,10 @@ function getThresholds(){
 
 
 
+
+
+
+
+
+
+blueMaxThreshEl?.addEventListener('input', ()=>{ updateBlueJudge(); });
