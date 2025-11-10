@@ -186,14 +186,12 @@
     }
   });
 
-  function renderResult(data){
+function renderResult(data){
   const { has_hem, events = [], baseline = 0, series = [] } = data;
-  // 命中提示
   const hitColor = has_hem ? '#22c55e' : '#9da0a6';
-  const hitText  = has_hem ? \u68C0\u6D4B\u5230 HEM \u4E8B\u4EF6  \u4E2A : \u672A\u68C0\u6D4B\u5230\u76F8\u5173\u4E8B\u4EF6;
-  resultText.innerHTML = <span style=\"color:\"></span>;
+  const hitText  = has_hem ? ('Detected HEM events: ' + String(events.length)) : 'No events detected';
+  resultText.innerHTML = '<span style="color:' + hitColor + '">' + hitText + '</span>';
 
-  // 方法徽章
   const hasSudden = events.some(e=>e.type==='sudden');
   const hasThreshold = events.some(e=>e.type==='threshold');
   const hasRelative = events.some(e=>e.type==='relative');
@@ -203,7 +201,6 @@
     badge('Relative', hasRelative)
   ].join('');
 
-  // 统计与渲染
   if (!series.length){
     statsBox.innerHTML = '';
     renderChart([], [], baseline, []);
@@ -211,22 +208,22 @@
     renderEventsTable([]);
     return;
   }
+
   const xs = series.map(p=>p.t);
   const roi = series.map(p=>p.roi);
   const ref = series.map(p=>p.ref);
   const dif = roi.map((v,i)=> v - ref[i]);
-  const maxJump = maxDiff(roi);
+  const maxJump = (function(arr){ let m=0; for(let i=1;i<arr.length;i++){ m=Math.max(m, arr[i]-arr[i-1]); } return m; })(roi);
   const stats = [
-    stat('\u57FA\u51C6', baseline.toFixed(2)),
-    stat('ROI\u5747\u503C', mean(roi).toFixed(2)),
-    stat('ROI\u6700\u5927', Math.max(...roi).toFixed(2)),
-    stat('\u6700\u5927\u7A81\u8DF3', maxJump.toFixed(2)),
-    stat('\u5DEE\u503C\u6700\u5927', Math.max(...dif).toFixed(2)),
-    stat('\u65F6\u957F', fmtTime(xs[xs.length-1]))
+    stat('Baseline', baseline.toFixed(2)),
+    stat('ROI mean', (roi.reduce((a,b)=>a+b,0)/Math.max(1,roi.length)).toFixed(2)),
+    stat('ROI max', Math.max(...roi).toFixed(2)),
+    stat('Max jump', maxJump.toFixed(2)),
+    stat('Max diff', Math.max(...dif).toFixed(2)),
+    stat('Duration', fmtTime(xs[xs.length-1]||0))
   ];
   statsBox.innerHTML = stats.join('');
 
-  // 绘图与时间线
   renderChart(xs, series, baseline, events);
   analyzedXs = xs; analyzedEvents = events; analyzedSeries = series; analyzedBaseline = baseline;
   recomputeShadedIntervals();
@@ -238,6 +235,15 @@
   timelineState.max = seriesEnd;
   renderTimeline();
   renderEventsTable(events);
+}
+
+// thresholds helper (kept close to shading logic)
+function getThresholds(){
+  const riseInput = document.getElementById('p_rise_thresh');
+  const fallInput = document.getElementById('p_fall_thresh');
+  const rise = Number((riseInput && riseInput.value) || 15.5);
+  const fall = Number((fallInput && fallInput.value) || -3);
+  return { rise, fall };
 }
   function recomputeShadedIntervals(){
     if (!analyzedSeries || !analyzedSeries.length || !analyzedXs || !analyzedXs.length){ shadedIntervals = []; return; }
@@ -463,8 +469,8 @@
 
     // fix panel headers and hints
     setText('.panel.video-panel .panel-header', '\u89C6\u9891\u4E0E ROI');
-    const if (resPanelHeader) resPanelHeader.textContent = 'Analysis';
-    if (if (resPanelHeader) resPanelHeader.textContent = 'Analysis';
+    const resPanelHeader = document.querySelector('.panel-header');
+    if (resPanelHeader) resPanelHeader.textContent = 'Analysis';
     setText('.hint', 'Select ROI: left-drag; middle pan; right toggle ROI');
 
     // curve toggle labels
