@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HEM Analyzer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="titlebar">
+        <div class="title-left">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div class="title">HEM Analyzer</div>
+        <div class="title-right">VS Code Theme</div>
+      </header>
+
+      <div class="container">
+        <aside class="sidebar">
+          <div class="section">
+            <label class="label">视频文件 (mp4)</label>
+            <input type="file" id="fileInput" accept="video/mp4" />
+          </div>
+          <div class="section">
+            <label class="label">采样帧率 (fps)</label>
+            <input type="number" id="sampleFps" min="1" max="30" step="1" value="8" />
+          </div>
+          <div class="section">
+            <label class="label">检测方案</label>
+            <div class="checkboxes">
+              <label><input type="checkbox" class="method" value="sudden" checked />突增</label>
+              <label><input type="checkbox" class="method" value="threshold" checked />阈值</label>
+              <label><input type="checkbox" class="method" value="relative" checked />相对</label>
+            </div>
+          </div>
+          <div class="section">
+            <label class="label">HEM 判定标准与参数</label>
+            <div class="criteria">
+              <details open>
+                <summary>规则说明</summary>
+                <ul>
+                  <li>突增：ROI灰度一阶差分高于自适应门限（基于MAD）且超过最小Δ</li>
+                  <li>阈值：ROI灰度高于“基线+偏移”并持续≥最小帧数</li>
+                  <li>相对：ROI灰度与同帧参考均值的差值超过阈值</li>
+                </ul>
+              </details>
+              <div class="grid">
+                <label>平滑窗口 k<input id="p_smooth_k" type="number" min="1" max="21" step="1" value="3"></label>
+                <label>基线样本 n<input id="p_baseline_n" type="number" min="3" max="200" step="1" value="10"></label>
+                <label>突增倍数 k<input id="p_sudden_k" type="number" min="0" step="0.5" value="6"></label>
+                <label>突增最小Δ<input id="p_sudden_min" type="number" min="0" step="0.5" value="4"></label>
+                <label>阈值偏移 Δ<input id="p_threshold_delta" type="number" min="0" step="0.5" value="8"></label>
+                <label>阈值最小帧<input id="p_threshold_hold" type="number" min="1" max="30" step="1" value="1"></label>
+                <label>相对差阈值<input id="p_relative_delta" type="number" min="0" step="0.5" value="6"></label>
+              </div>
+            </div>
+          </div>
+          <div class="section">
+            <button id="analyzeBtn" disabled>分析</button>
+          </div>
+          <div class="section">
+            <label class="label"><span id="shade_title">Timeline Shading</span></label>
+            <div class="grid">
+              <label><span id="rise_label">Rise Threshold (+)</span><input id="p_rise_thresh" type="number" step="0.1" value="15.5"></label>
+              <label><span id="fall_label">Fall Threshold (-)</span><input id="p_fall_thresh" type="number" step="0.1" value="-3"></label>
+            </div>
+          </div>
+          <div class="section small" id="status"></div>
+        </aside>
+
+        <main class="main">
+  <div class="content-grid">
+    <div class="left-col">
+      <div class="panel video-panel">
+        <div class="panel-header">Video & ROI</div>
+        <div class="panel-body video-box">
+          <div id="videoWrap" class="video-wrap">
+            <video id="video" controls></video>
+            <canvas id="overlay"></canvas>
+          </div>
+          <div class="hint">Select ROI: left-drag; middle button pan; right toggles</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">Analysis</div>
+        <div class="panel-body">
+          <div id="resultText" class="result-text">Waiting for analysis...</div>
+          <div class="badges" id="methodBadges"></div>
+          <div class="stats" id="stats"></div>
+          <div class="curve-toggle">
+            <label><input type="checkbox" id="showBlue" checked> Blue Delta v</label>
+            <label><input type="checkbox" id="showYellow" checked> Yellow d(Delta v)</label>
+          </div>
+          <div class="chart-area">
+            <canvas id="chart" height="200"></canvas>
+            <canvas id="timeline" height="36" style="width:100%"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="panel events-pane">
+      <div class="panel-header">Events</div>
+      <div class="panel-body">
+        <div class="events-body">
+          <table id="eventsTable">
+            <thead>
+              <tr><th>Time</th><th>Type</th><th>Score</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+      </div>
+    </div>
+    <script src="script.js?v=hem5"></script>
+  </body>
+  </html>
+
+
+
+
+
+
+
+
