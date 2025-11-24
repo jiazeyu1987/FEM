@@ -17,6 +17,12 @@
   const sampleFpsEl = document.getElementById('sampleFps');
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
+  // ROI控件
+  const selectROICenterBtn = document.getElementById('selectROICenterBtn');
+  const roiWidthEl = document.getElementById('roi_width');
+  const roiHeightEl = document.getElementById('roi_height');
+  const roiCenterInfoEl = document.getElementById('roi_center_info');
+
   // parameter inputs
   const p = {
     smooth_k: document.getElementById('p_smooth_k'),
@@ -33,6 +39,8 @@
   };
 
   let roi = null; // normalized {x,y,w,h}
+  let roiCenter = null; // {x, y} in pixel coordinates
+  let selectingROICenter = false; // 是否正在选择ROI中心点
   let dragging = false; let start = null; let rectPx = null;
   let analyzedXs = []; let analyzedEvents = []; let analyzedSeries = []; let analyzedBaseline = 0;
   let shadedIntervals = []; // [{start, end}] regions to shade on timeline
@@ -51,8 +59,25 @@
     const url = URL.createObjectURL(file);
     video.src = url;
     analyzeBtn.disabled = !(roi && roi.w > 0 && roi.h > 0);
-    resultText.textContent = '加载视频，选择ROI后点击分析…';
+    resultText.textContent = '加载视频，设置ROI后点击分析…';
   });
+
+  // ROI中心点选择按钮事件
+  selectROICenterBtn.addEventListener('click', () => {
+    if (!video.src || video.readyState < 2) {
+      alert('请先加载视频');
+      return;
+    }
+    selectingROICenter = true;
+    selectROICenterBtn.classList.add('active');
+    selectROICenterBtn.textContent = '在视频上点击选择中心点';
+    overlay.style.cursor = 'crosshair';
+    statusEl.textContent = '请在视频上点击选择ROI中心点';
+  });
+
+  // ROI尺寸变化时更新ROI
+  roiWidthEl.addEventListener('input', updateROIFromCenter);
+  roiHeightEl.addEventListener('input', updateROIFromCenter);
 
   // Resize overlay to match video client size
   const resizeOverlay = () => {
@@ -112,11 +137,23 @@
       roiVisible = !roiVisible; drawOverlay();
       return;
     }
-    if (e.button !== 0) return; // only left button draws ROI
-    const p = localPos(e);
-    start = {x: p.x, y: p.y};
-    dragging = true; rectPx = {x:start.x, y:start.y, w:0, h:0};
-    drawOverlay();
+    if (e.button !== 0) return; // only left button
+
+    // 如果正在选择ROI中心点
+    if (selectingROICenter) {
+      e.preventDefault();
+      const p = localPos(e);
+      roiCenter = {x: p.x, y: p.y};
+      updateROIFromCenter();
+      finishROICenterSelection();
+      return;
+    }
+
+    // 原有的拖拽绘制ROI逻辑（保留但禁用）
+    // const p = localPos(e);
+    // start = {x: p.x, y: p.y};
+    // dragging = true; rectPx = {x:start.x, y:start.y, w:0, h:0};
+    // drawOverlay();
   });
   overlay.addEventListener('mousemove', (e)=>{
     if(!dragging) return;
@@ -133,20 +170,59 @@
   return roi !== null;
 }
 
-function finishDrag(){
-    if (!dragging) return;
-    dragging = false;
-    if(rectPx && rectPx.w > 3 && rectPx.h > 3){
-      roi = {
-        x: rectPx.x / overlay.width,
-        y: rectPx.y / overlay.height,
-        w: rectPx.w / overlay.width,
-        h: rectPx.h / overlay.height,
-      };
-      analyzeBtn.disabled = !fileInput.files?.[0];
-      statusEl.textContent = `ROI = x:${roi.x.toFixed(3)}, y:${roi.y.toFixed(3)}, w:${roi.w.toFixed(3)}, h:${roi.h.toFixed(3)}`;
-    }
+// 根据中心点和尺寸更新ROI
+function updateROIFromCenter() {
+  if (!roiCenter || !overlay.width || !overlay.height) return;
+
+  const width = Number(roiWidthEl.value) || 60;
+  const height = Number(roiHeightEl.value) || 60;
+
+  // 计算ROI矩形，确保不超出视频边界
+  const halfW = width / 2;
+  const halfH = height / 2;
+
+  const x = Math.max(0, Math.min(roiCenter.x - halfW, overlay.width - width));
+  const y = Math.max(0, Math.min(roiCenter.y - halfH, overlay.height - height));
+
+  rectPx = {x, y, w: width, h: height};
+
+  // 更新归一化的ROI坐标
+  roi = {
+    x: x / overlay.width,
+    y: y / overlay.height,
+    w: width / overlay.width,
+    h: height / overlay.height,
+  };
+
+  // 更新UI状态
+  analyzeBtn.disabled = !fileInput.files?.[0];
+  statusEl.textContent = `ROI = 中心(${roiCenter.x.toFixed(0)}, ${roiCenter.y.toFixed(0)}) 尺寸(${width}x${height})`;
+  roiCenterInfoEl.textContent = `中心点: (${roiCenter.x.toFixed(0)}, ${roiCenter.y.toFixed(0)})`;
+
+  // 重新绘制ROI
+  drawOverlay();
+
+  // 通知ROI更新
+  onROIUpdated();
+}
+
+// 完成ROI中心点选择
+function finishROICenterSelection() {
+  selectingROICenter = false;
+  selectROICenterBtn.classList.remove('active');
+  selectROICenterBtn.textContent = '点击选择中心点';
+  overlay.style.cursor = 'default';
+
+  if (roiCenter) {
+    statusEl.textContent = `ROI中心点已选择: (${roiCenter.x.toFixed(0)}, ${roiCenter.y.toFixed(0)})`;
   }
+}
+
+// 禁用原有的拖拽绘制ROI功能
+function finishDrag(){
+  // 原有功能已禁用，使用中心点+尺寸的方式
+  return;
+}
   overlay.addEventListener('mouseup', finishDrag);
   overlay.addEventListener('mouseleave', finishDrag);
   window.addEventListener('mouseup', ()=>{ if (isPanning){ isPanning=false; overlay.classList.remove('panning'); }});
@@ -796,13 +872,9 @@ function getThresholds(){
     analyzeBtn.disabled = true; // 禁用单个分析按钮
   }
 
-  // ROI选择完成监听 - 在原有finishDrag函数基础上添加批量处理逻辑
-  const originalFinishDrag = finishDrag;
-  finishDrag = function() {
-    // 先调用原有的finishDrag逻辑
-    originalFinishDrag.apply(this, arguments);
-
-    console.log('ROI选择完成，当前ROI:', roi);
+  // ROI更新监听 - 监听ROI变化
+  function onROIUpdated() {
+    console.log('ROI已更新，当前ROI:', roi);
 
     // 如果有ROI选择，自动保存用于批量处理
     if (roi && roi.w > 0 && roi.h > 0) {
@@ -810,13 +882,13 @@ function getThresholds(){
 
       if (firstVideoLoaded && batchFilesList.length > 0) {
         statusEl.textContent = `ROI已设置，将应用到所有 ${batchFilesList.length} 个视频`;
-      } else {
+      } else if (!selectingROICenter) {
         statusEl.textContent = `ROI已设置，可以在选择文件夹后进行批量分析`;
       }
 
       console.log('ROI已保存用于批量处理:', savedROI);
     }
-  };
+  }
 
   // 批量分析按钮点击事件
   batchAnalyzeBtn.addEventListener('click', async () => {

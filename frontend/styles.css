@@ -202,3 +202,38 @@ tbody tr:hover{background:#0b1220}
 #exportBtn:hover {
   background: #047857;
 }
+
+/* ROI控件样式 */
+.roi-controls {
+  background: #111827;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+#selectROICenterBtn {
+  background: #f59e0b;
+  border-color: #d97706;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+#selectROICenterBtn:hover {
+  background: #d97706;
+}
+
+#selectROICenterBtn.active {
+  background: #10b981;
+  border-color: #059669;
+}
+
+.roi-info {
+  background: #1f2937;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+#roi_width, #roi_height {
+  margin-top: 4px;
+}
