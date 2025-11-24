@@ -46,10 +46,12 @@ def compute_series(
     roi: Dict[str, float],
     sample_fps: float,
     ref_mode: str = "global",
+    brightness_threshold: float = 128.0,
 ):
     series_t: List[float] = []
     roi_mean: List[float] = []
     ref_mean: List[float] = []
+    high_brightness_ratio: List[float] = []
 
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -71,6 +73,13 @@ def compute_series(
         roi_patch = gray[y0:y1, x0:x1]
         roi_val = float(np.mean(roi_patch)) if roi_patch.size else float("nan")
 
+        # Calculate high brightness pixel ratio
+        if roi_patch.size > 0:
+            high_pixels = np.sum(roi_patch >= brightness_threshold)
+            high_ratio = (high_pixels / roi_patch.size) * 100.0  # Convert to percentage
+        else:
+            high_ratio = 0.0
+
         if ref_mode == "global":
             ref_val = float(np.mean(gray))
         else:
@@ -80,8 +89,9 @@ def compute_series(
         series_t.append(t)
         roi_mean.append(roi_val)
         ref_mean.append(ref_val)
+        high_brightness_ratio.append(high_ratio)
 
-    return series_t, roi_mean, ref_mean
+    return series_t, roi_mean, ref_mean, high_brightness_ratio
 
 
 def moving_average(x: np.ndarray, k: int = 3) -> np.ndarray:
@@ -172,6 +182,8 @@ async def analyze(
     threshold_delta: Optional[float] = Form(None),
     threshold_hold: Optional[int] = Form(None),
     relative_delta: Optional[float] = Form(None),
+    # Brightness threshold for high brightness pixel ratio
+    brightness_threshold: float = Form(128.0),
 ):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -189,7 +201,7 @@ async def analyze(
             return JSONResponse(status_code=400, content={"error": "Cannot open video"})
 
         roi = {"x": roi_x, "y": roi_y, "w": roi_w, "h": roi_h}
-        t, roi_m, ref_m = compute_series(cap, roi, sample_fps, ref_mode="global")
+        t, roi_m, ref_m, high_ratio = compute_series(cap, roi, sample_fps, ref_mode="global", brightness_threshold=brightness_threshold)
         cap.release()
 
         params: Dict[str, Any] = {}
@@ -210,7 +222,7 @@ async def analyze(
         )
 
         # Prepare compact series for plotting
-        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf)} for tt, rm, rf in zip(t, roi_m, ref_m)]
+        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf), "high_ratio": float(hr)} for tt, rm, rf, hr in zip(t, roi_m, ref_m, high_ratio)]
 
         return {
             "has_hem": has_hem,

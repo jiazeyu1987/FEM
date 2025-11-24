@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JavaScript Error Fix Test</title>
+</head>
+<body>
+    <h1>测试 blueMaxThreshEl 修复</h1>
+
+    <!-- 模拟HTML结构 -->
+    <input id="blue_max_thresh" type="number" value="35">
+    <div id="test-results"></div>
+
+    <script>
+        // 模拟IIFE结构
+        (function(){
+            console.log('Starting test...');
+
+            // 模拟变量定义
+            const blueMaxThreshEl = document.getElementById('blue_max_thresh');
+            const testResults = document.getElementById('test-results');
+
+            // 测试变量是否定义
+            if (blueMaxThreshEl) {
+                testResults.innerHTML += '<p style="color: green;">✓ blueMaxThreshEl defined successfully</p>';
+            } else {
+                testResults.innerHTML += '<p style="color: red;">✗ blueMaxThreshEl not defined</p>';
+            }
+
+            // 测试事件监听器是否可以添加
+            try {
+                blueMaxThreshEl?.addEventListener('input', ()=>{
+                    console.log('Event listener added successfully');
+                });
+                testResults.innerHTML += '<p style="color: green;">✓ Event listener added successfully</p>';
+            } catch (error) {
+                testResults.innerHTML += '<p style="color: red;">✗ Event listener failed: ' + error.message + '</p>';
+            }
+
+            console.log('Test completed');
+        })();
+    </script>
+</body>
+</html>

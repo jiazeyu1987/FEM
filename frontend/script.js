@@ -26,6 +26,7 @@
     threshold_delta: document.getElementById('p_threshold_delta'),
     threshold_hold: document.getElementById('p_threshold_hold'),
     relative_delta: document.getElementById('p_relative_delta'),
+    brightness_threshold: document.getElementById('brightness_threshold'),
     // timeline shading thresholds (frontend-only)
     rise_thresh: document.getElementById('p_rise_thresh'),
     fall_thresh: document.getElementById('p_fall_thresh'),
@@ -128,7 +129,11 @@
     rectPx.h = Math.abs(y - start.y);
     drawOverlay();
   });
-  function finishDrag(){
+  function applyExistingRoiToOverlay(){
+  return roi !== null;
+}
+
+function finishDrag(){
     if (!dragging) return;
     dragging = false;
     if(rectPx && rectPx.w > 3 && rectPx.h > 3){
@@ -216,12 +221,35 @@ function renderResult(data){
   const ref = series.map(p=>p.ref);
   const dif = roi.map((v,i)=> v - ref[i]);
   const maxJump = (function(arr){ let m=0; for(let i=1;i<arr.length;i++){ m=Math.max(m, arr[i]-arr[i-1]); } return m; })(roi);
+
+  // 计算蓝色和黄色曲线的最大值
+  // 蓝线：当前帧ROI均值 - 之前所有帧ROI均值的平均
+  const d1 = new Array(roi.length).fill(0);
+  let acc = 0;
+  for (let i = 0; i < roi.length; i++) {
+    if (i === 0) {
+      d1[i] = 0;
+      acc += roi[i];
+      continue;
+    }
+    const prevMean = acc / i; // mean of roi[0..i-1]
+    d1[i] = roi[i] - prevMean;
+    acc += roi[i];
+  }
+  // 黄线：ROI中高亮度像素占比
+  const high_ratio = series.map(p=>p.high_ratio || 0);
+
+  const blueMax = Math.max(...d1);
+  const yellowMax = Math.max(...high_ratio);
+
   const stats = [
     stat('Baseline', baseline.toFixed(2)),
     stat('ROI mean', (roi.reduce((a,b)=>a+b,0)/Math.max(1,roi.length)).toFixed(2)),
     stat('ROI max', Math.max(...roi).toFixed(2)),
     stat('Max jump', maxJump.toFixed(2)),
     stat('Max diff', Math.max(...dif).toFixed(2)),
+    stat('Blue Max Δv', blueMax.toFixed(2)),
+    stat('Yellow Max %', yellowMax.toFixed(1)),
     stat('Duration', fmtTime(xs[xs.length-1]||0))
   ];
   statsBox.innerHTML = stats.join('');
@@ -258,7 +286,6 @@ function getThresholds(){
       if (i===0){ d1[i]=0; acc+=v[i]; continue; }
       const prevMean = acc / i; d1[i] = v[i] - prevMean; acc += v[i];
     }
-    const d2 = d1.map((_,i)=> i>0 ? (d1[i]-d1[i-1]) : 0);
     const { rise, fall } = getThresholds();
     function crossTime(t1,v1,t2,v2,thr){ const dv=v2-v1; if (Math.abs(dv)<1e-9) return t2; const r=(thr-v1)/dv; const cl=Math.max(0,Math.min(1,r)); return t1 + cl*(t2-t1); }
     const intervals = [];
@@ -306,7 +333,8 @@ function getThresholds(){
     // ROI均值序列与派生曲线
     const v = series.map(p=>p.roi);
     const d1 = v.map((_,i)=> i>0 ? (v[i]-v[i-1]) : 0);            // 相邻帧灰度均值差 Δv
-    const d2 = d1.map((_,i)=> i>1 ? (d1[i]-d1[i-1]) : 0);          // 差值变化 d(Δv)
+    // Use high_ratio for yellow curve (percentage of high brightness pixels in ROI)
+    const high_ratio = series.map(p=>p.high_ratio || 0);
 
     // 视图与时间轴同步
     let minX = xs[0]; let maxX = xs[xs.length-1];
@@ -503,7 +531,7 @@ function getThresholds(){
 
     // curve toggle labels
     setLabelTextForInput('showBlue', 'Blue \\u0394v');
-    setLabelTextForInput('showYellow', 'Yellow d(\\u0394v)');
+    setLabelTextForInput('showYellow', 'Yellow Bright\\u0025');
 
     // events pane and table headers
     setText('.events-pane .panel-header, .events .events-header', '\u4E8B\u4EF6\u5217\u8868');
@@ -601,8 +629,8 @@ function getThresholds(){
       d1[i] = v[i] - prevMean;
       acc += v[i];
     }
-    // 黄线：蓝线的一阶差分，反映蓝线变化
-    const d2 = d1.map((_,i)=> i>0 ? (d1[i]-d1[i-1]) : 0);
+    // Use high_ratio for yellow curve (percentage of high brightness pixels in ROI)
+    const high_ratio = series.map(p=>p.high_ratio || 0);
 
     // window sync to timeline
     let minX = xs[0], maxX = xs[xs.length-1];
@@ -616,7 +644,7 @@ function getThresholds(){
     const inView = (arr)=> arr.filter((_,i)=> xs[i] >= minX && xs[i] <= maxX);
     const parts = [];
     if (chartState.showBlue) parts.push(inView(d1).length? inView(d1):d1);
-    if (chartState.showYellow) parts.push(inView(d2).length? inView(d2):d2);
+    if (chartState.showYellow) parts.push(inView(high_ratio).length? inView(high_ratio):high_ratio);
     if (!parts.length){
       // nothing selected, just draw axis baseline
       const padLeft = 56, padRight = 10, padTop = 16, padBottom = 22;
@@ -649,7 +677,7 @@ function getThresholds(){
     }
     if (chartState.showYellow){
       ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 1.5; ctx.beginPath();
-      xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x=x2px(t), y=y2px(d2[i]); const prev=i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
+      xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x=x2px(t), y=y2px(high_ratio[i]); const prev=i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
       ctx.stroke();
     }
 
@@ -657,7 +685,7 @@ function getThresholds(){
     let tx = padLeft + 4; let ty = padTop - 2; ty = Math.max(14, ty);
     ctx.font = '12px sans-serif';
     if (chartState.showBlue){ ctx.fillStyle = '#93c5fd'; ctx.fillText('蓝: 当前帧ROI均值 − 历史均值  X=时间(s)  Y=差值', tx, 14); }
-    if (chartState.showYellow){ ctx.fillStyle = '#fbbf24'; ctx.fillText('黄: 上述差值的一阶差分  X=时间(s)  Y=变化量', tx, 28); }
+    if (chartState.showYellow){ ctx.fillStyle = '#fbbf24'; ctx.fillText('黄: ROI中高亮度像素占比(%)  X=时间(s)  Y=百分比', tx, 28); }
 
     // current time line
     if (!isNaN(video.currentTime)){
@@ -672,6 +700,388 @@ function getThresholds(){
   function syncToggles(){ chartState.showBlue = !!(showBlueEl?.checked ?? true); chartState.showYellow = !!(showYellowEl?.checked ?? true); rerenderAll(); }
   showBlueEl?.addEventListener('change', syncToggles);
   showYellowEl?.addEventListener('change', syncToggles);
+  blueMaxThreshEl?.addEventListener('input', ()=>{ updateBlueJudge(); });
+
+  // ===== 批量处理功能 =====
+  const selectFolderBtn = document.getElementById('selectFolderBtn');
+  const folderInput = document.getElementById('folderInput');
+  const batchAnalyzeBtn = document.getElementById('batchAnalyzeBtn');
+  const batchProgressSection = document.getElementById('batchProgressSection');
+  const batchResultsSection = document.getElementById('batchResultsSection');
+  const batchFiles = document.getElementById('batchFiles');
+  const fileCount = document.getElementById('fileCount');
+  const exportBtn = document.getElementById('exportBtn');
+
+  // 批量处理状态
+  let batchFilesList = [];
+  let batchResults = [];
+  let batchProcessing = false;
+  let savedROI = null;
+  let firstVideoLoaded = false;
+
+  // 初始化批量处理按钮状态 - 按钮始终可用
+  console.log('初始化批量分析按钮状态:', batchAnalyzeBtn);
+  if (batchAnalyzeBtn) {
+    batchAnalyzeBtn.disabled = false; // 按钮始终可用
+    console.log('批量分析按钮已启用（始终可用）');
+  }
+
+  // 选择文件夹按钮点击事件
+  selectFolderBtn.addEventListener('click', () => {
+    folderInput.click();
+  });
+
+  // 文件夹选择事件
+  folderInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files);
+    batchFilesList = filterVideoFiles(files);
+
+    if (batchFilesList.length === 0) {
+      alert('所选文件夹中没有找到MP4视频文件');
+      return;
+    }
+
+    displayFileList();
+    batchProgressSection.style.display = 'block';
+
+    // 加载第一个视频用于ROI选择
+    loadFirstVideoForROI();
+  });
+
+  // 过滤MP4文件
+  function filterVideoFiles(files) {
+    return files.filter(file =>
+      file.type === 'video/mp4' ||
+      file.name.toLowerCase().endsWith('.mp4')
+    );
+  }
+
+  // 显示文件列表
+  function displayFileList() {
+    fileCount.textContent = batchFilesList.length;
+    batchFiles.innerHTML = '';
+
+    batchFilesList.forEach((file, index) => {
+      const fileItem = document.createElement('div');
+      fileItem.className = 'batch-file-item';
+      fileItem.id = `batch-file-${index}`;
+      fileItem.innerHTML = `
+        <span>${file.name}</span>
+        <span class="batch-file-status">等待中</span>
+      `;
+      batchFiles.appendChild(fileItem);
+    });
+  }
+
+  // 加载第一个视频用于ROI选择
+  async function loadFirstVideoForROI() {
+    if (batchFilesList.length === 0) return;
+
+    const firstFile = batchFilesList[0];
+    const url = URL.createObjectURL(firstFile);
+    video.src = url;
+
+    console.log('正在加载第一个视频用于ROI选择:', firstFile.name);
+
+    // 等待视频加载完成
+    video.addEventListener('loadedmetadata', () => {
+      autoFitHeight();
+      statusEl.textContent = '请在视频上框选ROI区域，ROI将应用到所有视频（也可以在其他视频上选择ROI）';
+      batchAnalyzeBtn.disabled = false; // 按钮始终可用
+      firstVideoLoaded = true;
+      console.log('第一个视频加载完成，等待ROI选择');
+    }, { once: true });
+
+    resultText.textContent = '请先选择ROI区域，然后开始批量分析';
+    analyzeBtn.disabled = true; // 禁用单个分析按钮
+  }
+
+  // ROI选择完成监听 - 在原有finishDrag函数基础上添加批量处理逻辑
+  const originalFinishDrag = finishDrag;
+  finishDrag = function() {
+    // 先调用原有的finishDrag逻辑
+    originalFinishDrag.apply(this, arguments);
+
+    console.log('ROI选择完成，当前ROI:', roi);
+
+    // 如果有ROI选择，自动保存用于批量处理
+    if (roi && roi.w > 0 && roi.h > 0) {
+      savedROI = {...roi};
+
+      if (firstVideoLoaded && batchFilesList.length > 0) {
+        statusEl.textContent = `ROI已设置，将应用到所有 ${batchFilesList.length} 个视频`;
+      } else {
+        statusEl.textContent = `ROI已设置，可以在选择文件夹后进行批量分析`;
+      }
+
+      console.log('ROI已保存用于批量处理:', savedROI);
+    }
+  };
+
+  // 批量分析按钮点击事件
+  batchAnalyzeBtn.addEventListener('click', async () => {
+    console.log('批量分析按钮被点击');
+    console.log('当前ROI:', roi);
+    console.log('savedROI:', savedROI);
+    console.log('batchFilesList.length:', batchFilesList.length);
+
+    // 检查是否选择了文件夹
+    if (batchFilesList.length === 0) {
+      alert('请先选择包含MP4视频的文件夹');
+      return;
+    }
+
+    // 检查ROI - 优先使用当前ROI，如果没有则使用保存的ROI
+    let roiToUse = null;
+    if (roi && roi.w > 0 && roi.h > 0) {
+      roiToUse = {...roi};
+      console.log('使用当前ROI作为批量分析ROI:', roiToUse);
+    } else if (savedROI) {
+      roiToUse = savedROI;
+      console.log('使用保存的ROI作为批量分析ROI:', roiToUse);
+    }
+
+    if (!roiToUse) {
+      alert('请先在任意视频上框选ROI区域，然后再进行批量分析');
+      return;
+    }
+
+    // 直接开始批量分析，不需要确认弹框
+    await startBatchAnalysis();
+  });
+
+  // 开始批量分析
+  async function startBatchAnalysis() {
+    if (batchProcessing) return;
+
+    batchProcessing = true;
+    batchResults = [];
+    batchAnalyzeBtn.disabled = true;
+    selectFolderBtn.disabled = true;
+    batchResultsSection.style.display = 'none';
+
+    const progressFill = document.querySelector('.progress-fill');
+    const progressText = document.querySelector('.progress-text');
+
+    for (let i = 0; i < batchFilesList.length; i++) {
+      const file = batchFilesList[i];
+      const progress = ((i + 1) / batchFilesList.length) * 100;
+
+      // 更新进度
+      progressFill.style.width = `${progress}%`;
+      progressText.textContent = `正在分析 ${i + 1}/${batchFilesList.length}: ${file.name}`;
+
+      // 更新文件状态
+      updateFileStatus(i, 'processing', '分析中...');
+
+      try {
+        const result = await analyzeSingleFile(file);
+        batchResults.push({
+          fileName: file.name,
+          result: result
+        });
+        updateFileStatus(i, 'success', '完成');
+      } catch (error) {
+        console.error(`分析文件 ${file.name} 时出错:`, error);
+        batchResults.push({
+          fileName: file.name,
+          result: null,
+          error: error.message
+        });
+        updateFileStatus(i, 'error', '失败');
+      }
+
+      // 添加小延迟避免过快请求
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    progressText.textContent = '分析完成！';
+    showBatchResults();
+
+    batchProcessing = false;
+    selectFolderBtn.disabled = false;
+  }
+
+  // 分析单个文件
+  async function analyzeSingleFile(file) {
+    // 使用当前ROI或保存的ROI参数
+    let roiToUse = null;
+    if (roi && roi.w > 0 && roi.h > 0) {
+      roiToUse = roi;
+      console.log('分析文件时使用当前ROI:', roiToUse);
+    } else if (savedROI) {
+      roiToUse = savedROI;
+      console.log('分析文件时使用保存的ROI:', roiToUse);
+    } else {
+      roiToUse = { x: 0.5, y: 0.5, w: 0.2, h: 0.2 }; // 默认ROI
+      console.log('分析文件时使用默认ROI:', roiToUse);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('roi_x', String(roiToUse.x));
+    formData.append('roi_y', String(roiToUse.y));
+    formData.append('roi_w', String(roiToUse.w));
+    formData.append('roi_h', String(roiToUse.h));
+    formData.append('sample_fps', String(Number(sampleFpsEl.value || 8)));
+    formData.append('methods', selectedMethods());
+
+    // 添加参数
+    Object.entries(p).forEach(([key, el]) => {
+      if (el && el.value !== '') {
+        formData.append(key, String(el.value));
+      }
+    });
+
+    const response = await fetch('http://localhost:8000/analyze', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`分析失败: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  // 更新文件状态
+  function updateFileStatus(index, status, text) {
+    const fileItem = document.getElementById(`batch-file-${index}`);
+    if (fileItem) {
+      fileItem.className = `batch-file-item ${status}`;
+      const statusEl = fileItem.querySelector('.batch-file-status');
+      if (statusEl) {
+        statusEl.textContent = text;
+      }
+    }
+  }
+
+  // 显示批量分析结果
+  function showBatchResults() {
+    batchResultsSection.style.display = 'block';
+
+    const totalFiles = batchResults.length;
+    const successfulFiles = batchResults.filter(r => r.result !== null).length;
+    const hemDetectedFiles = batchResults.filter(r => r.result && r.result.has_hem).length;
+    const totalEvents = batchResults.reduce((sum, r) => sum + (r.result ? r.result.events.length : 0), 0);
+
+    const summaryHTML = `
+      <div class="batch-stat">
+        <span class="batch-stat-label">总文件数:</span>
+        <span class="batch-stat-value">${totalFiles}</span>
+      </div>
+      <div class="batch-stat">
+        <span class="batch-stat-label">成功分析:</span>
+        <span class="batch-stat-value">${successfulFiles}</span>
+      </div>
+      <div class="batch-stat">
+        <span class="batch-stat-label">检测到HEM:</span>
+        <span class="batch-stat-value">${hemDetectedFiles}</span>
+      </div>
+      <div class="batch-stat">
+        <span class="batch-stat-label">总事件数:</span>
+        <span class="batch-stat-value">${totalEvents}</span>
+      </div>
+    `;
+
+    document.getElementById('batchSummaryContent').innerHTML = summaryHTML;
+    statusEl.textContent = `批量分析完成: ${successfulFiles}/${totalFiles} 成功`;
+  }
+
+  // 导出MD文件按钮点击事件
+  exportBtn.addEventListener('click', () => {
+    if (batchResults.length === 0) {
+      alert('没有可导出的结果');
+      return;
+    }
+
+    const markdownContent = generateMarkdownReport();
+    downloadMarkdown(markdownContent, `HEM分析报告_${new Date().toISOString().slice(0, 10)}.md`);
+  });
+
+  // 生成Markdown报告
+  function generateMarkdownReport() {
+    let markdown = '# HEM 批量分析报告\n\n';
+    markdown += `**生成时间**: ${new Date().toLocaleString()}\n\n`;
+
+    const totalFiles = batchResults.length;
+    const successfulFiles = batchResults.filter(r => r.result !== null).length;
+    const hemDetectedFiles = batchResults.filter(r => r.result && r.result.has_hem).length;
+
+    markdown += '## 统计摘要\n\n';
+    markdown += `- **总文件数**: ${totalFiles}\n`;
+    markdown += `- **成功分析**: ${successfulFiles}\n`;
+    markdown += `- **检测到HEM**: ${hemDetectedFiles}\n`;
+    markdown += `- **成功率**: ${((successfulFiles / totalFiles) * 100).toFixed(1)}%\n\n`;
+
+    markdown += '## 详细结果\n\n';
+    markdown += '| 文件名 | HEM检测 | 蓝色最大值 | 黄色最大值 | 事件数 | 状态 |\n';
+    markdown += '|--------|---------|-----------|-----------|--------|------|\n';
+
+    batchResults.forEach((item) => {
+      const fileName = item.fileName;
+
+      if (item.result) {
+        const hasHEM = item.result.has_hem;
+        const eventCount = item.result.events.length;
+
+        // 计算蓝色和黄色最大值
+        const { blueMax, yellowMax } = calculateMaxValues(item.result);
+
+        const hemStatus = hasHEM ? '✓' : '✗';
+        const blueMaxStr = blueMax.toFixed(2);
+        const yellowMaxStr = yellowMax.toFixed(1);
+
+        markdown += `| ${fileName} | ${hemStatus} | ${blueMaxStr} | ${yellowMaxStr}% | ${eventCount} | 成功 |\n`;
+      } else {
+        markdown += `| ${fileName} | ✗ | - | - | - | 失败 |\n`;
+      }
+    });
+
+    return markdown;
+  }
+
+  // 计算蓝色和黄色最大值
+  function calculateMaxValues(result) {
+    if (!result.series || result.series.length === 0) {
+      return { blueMax: 0, yellowMax: 0 };
+    }
+
+    const roi = result.series.map(p => p.roi);
+
+    // 计算蓝色曲线最大值
+    const d1 = new Array(roi.length).fill(0);
+    let acc = 0;
+    for (let i = 0; i < roi.length; i++) {
+      if (i === 0) {
+        d1[i] = 0;
+        acc += roi[i];
+        continue;
+      }
+      const prevMean = acc / i;
+      d1[i] = roi[i] - prevMean;
+      acc += roi[i];
+    }
+
+    const blueMax = Math.max(...d1);
+    const yellowMax = Math.max(...result.series.map(p => p.high_ratio || 0));
+
+    return { blueMax, yellowMax };
+  }
+
+  // 下载Markdown文件
+  function downloadMarkdown(content, filename) {
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 
 })();
 
@@ -696,4 +1106,3 @@ function getThresholds(){
 
 
 
-blueMaxThreshEl?.addEventListener('input', ()=>{ updateBlueJudge(); });

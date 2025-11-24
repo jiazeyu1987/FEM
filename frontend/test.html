@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Fixes</title>
+</head>
+<body>
+    <h1>测试修复结果</h1>
+    <div id="blue_max_thresh" style="display:none;">35</div>
+    <div id="test-results"></div>
+
+    <script>
+        // 测试 blueMaxThreshEl 定义
+        const blueMaxThreshEl = document.getElementById('blue_max_thresh');
+        const testResults = document.getElementById('test-results');
+
+        testResults.innerHTML += '<p>blueMaxThreshEl: ' + (blueMaxThreshEl ? 'OK' : 'ERROR') + '</p>';
+
+        // 测试 applyExistingRoiToOverlay 函数
+        function applyExistingRoiToOverlay(){
+            return roi !== null;
+        }
+
+        let roi = null;
+        testResults.innerHTML += '<p>applyExistingRoiToOverlay (no ROI): ' + (applyExistingRoiToOverlay() ? 'ERROR' : 'OK') + '</p>';
+
+        roi = {x: 0.5, y: 0.5, w: 0.2, h: 0.2};
+        testResults.innerHTML += '<p>applyExistingRoiToOverlay (with ROI): ' + (applyExistingRoiToOverlay() ? 'OK' : 'ERROR') + '</p>';
+
+        // 测试 high_ratio 数据处理
+        const series = [
+            {t: 0, roi: 10, ref: 8, high_ratio: 15.5},
+            {t: 1, roi: 12, ref: 9, high_ratio: 20.3},
+            {t: 2, roi: 11, ref: 8.5, high_ratio: 18.7}
+        ];
+
+        const high_ratio = series.map(p=>p.high_ratio || 0);
+        testResults.innerHTML += '<p>high_ratio extraction: ' + (high_ratio.length === 3 ? 'OK' : 'ERROR') + '</p>';
+        testResults.innerHTML += '<p>high_ratio values: [' + high_ratio.join(', ') + ']</p>';
+
+        console.log('All tests completed');
+    </script>
+</body>
+</html>

@@ -56,3 +56,149 @@ tbody tr:hover{background:#0b1220}
 .chart-with-events{display:grid;grid-template-columns:1fr 280px;gap:12px;align-items:start}
 .chart-area{display:flex;flex-direction:column;gap:8px}
 .events-pane .events-body{max-height:60vh;overflow:auto;border:1px solid var(--border);border-radius:6px}
+
+/* 批量处理相关样式 */
+#selectFolderBtn {
+  width: 100%;
+  background: #10b981;
+  border-color: #059669;
+}
+
+#selectFolderBtn:hover {
+  background: #059669;
+}
+
+#batchAnalyzeBtn {
+  width: 100%;
+  background: #8b5cf6;
+  border-color: #7c3aed;
+}
+
+#batchAnalyzeBtn:hover {
+  background: #7c3aed;
+}
+
+#batchAnalyzeBtn:disabled {
+  background: #6b7280;
+  border-color: #4b5563;
+}
+
+.batch-progress {
+  margin: 10px 0;
+  padding: 8px;
+  background: #111827;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.progress-bar {
+  height: 20px;
+  background: #374151;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #10b981);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.batch-file-list {
+  margin-top: 10px;
+}
+
+.batch-list-header {
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.batch-files {
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #111827;
+}
+
+.batch-file-item {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.batch-file-item:last-child {
+  border-bottom: none;
+}
+
+.batch-file-item.processing {
+  color: #3b82f6;
+}
+
+.batch-file-item.success {
+  color: #10b981;
+}
+
+.batch-file-item.error {
+  color: #ef4444;
+}
+
+.batch-file-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.batch-summary {
+  background: #111827;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.batch-summary h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.batch-stat {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.batch-stat-label {
+  color: var(--muted);
+}
+
+.batch-stat-value {
+  color: var(--text);
+  font-weight: 600;
+}
+
+#exportBtn {
+  background: #059669;
+  border-color: #047857;
+}
+
+#exportBtn:hover {
+  background: #047857;
+}
