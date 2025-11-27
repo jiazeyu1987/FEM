@@ -18,6 +18,11 @@
   const sampleFpsEl = document.getElementById('sampleFps');
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
+  // ROI控件
+  const selectROICenterBtn = document.getElementById('selectROICenterBtn');
+  const roiWidthEl = document.getElementById('roi_width');
+  const roiHeightEl = document.getElementById('roi_height');
+  const roiCenterInfoEl = document.getElementById('roi_center_info');
   // parameter inputs
   const p = {
     smooth_k: document.getElementById('p_smooth_k'),
@@ -33,6 +38,8 @@
   };
 
   let roi = null; // normalized {x,y,w,h}
+  let roiCenter = null; // {x, y} in pixel coordinates
+  let selectingROICenter = false; // 是否正在选择ROI中心点
   let dragging = false; let start = null; let rectPx = null;
   let analyzedXs = []; let analyzedEvents = []; let analyzedSeries = []; let analyzedBaseline = 0;
   let shadedIntervals = []; // [{start, end}] regions to shade on timeline
@@ -51,7 +58,8 @@
     const url = URL.createObjectURL(file);
     video.src = url;
     analyzeBtn.disabled = !(roi && roi.w > 0 && roi.h > 0);
-    resultText.textContent = '加载视频，选择ROI后点击分析…';
+    resultText.textContent = '视频加载完成，点击"选择中心点"设置ROI后开始分析';
+    statusEl.textContent = '请先选择ROI中心点，然后调整宽高参数';
   });
 
   // Resize overlay to match video client size
@@ -85,12 +93,39 @@
   function drawOverlay(){
     const ctx = overlay.getContext('2d');
     ctx.clearRect(0,0,overlay.width, overlay.height);
+
+    // 绘制ROI矩形
     if (rectPx && roiVisible){
       ctx.strokeStyle = '#4fc3f7';
       ctx.lineWidth = 2;
       ctx.strokeRect(rectPx.x, rectPx.y, rectPx.w, rectPx.h);
       ctx.fillStyle = 'rgba(79,195,247,0.15)';
       ctx.fillRect(rectPx.x, rectPx.y, rectPx.w, rectPx.h);
+    }
+
+    // 绘制ROI中心点标记
+    if (roiCenter) {
+      // 中心十字线
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(roiCenter.x - 5, roiCenter.y);
+      ctx.lineTo(roiCenter.x + 5, roiCenter.y);
+      ctx.moveTo(roiCenter.x, roiCenter.y - 5);
+      ctx.lineTo(roiCenter.x, roiCenter.y + 5);
+      ctx.stroke();
+
+      // 中心点圆圈
+      ctx.beginPath();
+      ctx.arc(roiCenter.x, roiCenter.y, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+    }
+
+    // 如果正在选择中心点，显示鼠标跟随的十字线
+    if (selectingROICenter) {
+      // 这里可以添加鼠标跟随的视觉效果
+      overlay.style.cursor = 'crosshair';
     }
   }
 
@@ -112,11 +147,23 @@
       roiVisible = !roiVisible; drawOverlay();
       return;
     }
-    if (e.button !== 0) return; // only left button draws ROI
-    const p = localPos(e);
-    start = {x: p.x, y: p.y};
-    dragging = true; rectPx = {x:start.x, y:start.y, w:0, h:0};
-    drawOverlay();
+
+    // 如果正在选择ROI中心点
+    if (selectingROICenter) {
+      e.preventDefault();
+      const p = localPos(e);
+      roiCenter = {x: p.x, y: p.y};
+      updateROIFromCenter();
+      finishROICenterSelection();
+      return;
+    }
+
+    // 原有的拖拽绘制ROI逻辑（保留但禁用）
+    // if (e.button !== 0) return; // only left button draws ROI
+    // const p = localPos(e);
+    // start = {x: p.x, y: p.y};
+    // dragging = true; rectPx = {x:start.x, y:start.y, w:0, h:0};
+    // drawOverlay();
   });
   overlay.addEventListener('mousemove', (e)=>{
     if(!dragging) return;
@@ -154,6 +201,74 @@
   });
   overlay.addEventListener('contextmenu', (e)=>{ e.preventDefault(); });
 
+  // ROI中心点选择按钮事件
+  selectROICenterBtn.addEventListener('click', () => {
+    selectingROICenter = true;
+    selectROICenterBtn.textContent = '请在视频上点击选择中心点';
+    selectROICenterBtn.style.backgroundColor = '#4fc3f7';
+    overlay.style.cursor = 'crosshair';
+    statusEl.textContent = 'ROI中心点选择模式：在视频上点击选择ROI中心点';
+  });
+
+  // ROI宽度/高度变化事件
+  roiWidthEl.addEventListener('input', updateROIFromCenter);
+  roiHeightEl.addEventListener('input', updateROIFromCenter);
+
+  // 根据中心点和尺寸更新ROI
+  function updateROIFromCenter() {
+    if (!roiCenter || !overlay.width || !overlay.height) return;
+
+    const width = Number(roiWidthEl.value) || 80;
+    const height = Number(roiHeightEl.value) || 160;
+
+    // 计算ROI矩形，确保不超出视频边界
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    const x = Math.max(0, Math.min(roiCenter.x - halfW, overlay.width - width));
+    const y = Math.max(0, Math.min(roiCenter.y - halfH, overlay.height - height));
+
+    rectPx = {x, y, w: width, h: height};
+
+    // 更新归一化的ROI坐标
+    roi = {
+      x: x / overlay.width,
+      y: y / overlay.height,
+      w: width / overlay.width,
+      h: height / overlay.height,
+    };
+
+    // 更新UI状态
+    analyzeBtn.disabled = !fileInput.files?.[0];
+    statusEl.textContent = `ROI = 中心(${roiCenter.x.toFixed(0)}, ${roiCenter.y.toFixed(0)}) 尺寸(${width}x${height})`;
+    roiCenterInfoEl.textContent = `中心点: (${roiCenter.x.toFixed(0)}, ${roiCenter.y.toFixed(0)})`;
+
+    // 重新绘制ROI
+    drawOverlay();
+
+    // 通知ROI更新
+    onROIUpdated();
+  }
+
+  // 完成ROI中心点选择
+  function finishROICenterSelection() {
+    selectingROICenter = false;
+    selectROICenterBtn.classList.remove('active');
+    selectROICenterBtn.textContent = '点击选择中心点';
+    selectROICenterBtn.style.backgroundColor = '';
+    overlay.style.cursor = 'default';
+
+    if (roi) {
+      statusEl.textContent = 'ROI选择完成，可以开始分析';
+    }
+  }
+
+  // ROI更新回调函数
+  function onROIUpdated() {
+    // 可以在这里添加ROI更新后的额外逻辑
+    console.log('ROI已更新:', roi);
+  }
+
   function selectedMethods(){
     return Array.from(methodsEls).filter(el=>el.checked).map(el=>el.value).join(',');
   }
@@ -161,7 +276,7 @@
   analyzeBtn.addEventListener('click', async ()=>{
     const file = fileInput.files?.[0];
     if (!file){ alert('请先选择视频'); return; }
-    if (!roi){ alert('请在视频上框选ROI'); return; }
+    if (!roi){ alert('请先选择ROI中心点并设置尺寸参数'); return; }
     resultText.textContent = '分析中…';
     statusEl.textContent = '上传并调用后端接口 /analyze';
     analyzeBtn.disabled = !(roi && roi.w > 0 && roi.h > 0);

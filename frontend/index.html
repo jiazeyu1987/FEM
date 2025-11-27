@@ -40,6 +40,28 @@
             </div>
           </div>
           <div class="section">
+            <label class="label">ROI设置</label>
+            <div class="roi-controls">
+              <label>
+                选择ROI中心点
+                <button id="selectROICenterBtn" type="button" style="width: 100%; margin-top: 5px;">点击选择中心点</button>
+              </label>
+              <div class="grid" style="margin-top: 10px;">
+                <label>
+                  ROI宽度 (px)
+                  <input id="roi_width" type="number" min="30" max="100" step="1" value="80" />
+                </label>
+                <label>
+                  ROI高度 (px)
+                  <input id="roi_height" type="number" min="30" max="100" step="1" value="160" />
+                </label>
+              </div>
+              <div class="roi-info" style="margin-top: 8px; font-size: 12px; color: var(--muted);">
+                <span id="roi_center_info">未选择中心点</span>
+              </div>
+            </div>
+          </div>
+          <div class="section">
             <label class="label">HEM 判定标准与参数</label>
             <div class="criteria">
               <details open>
@@ -84,7 +106,7 @@
             <video id="video" controls></video>
             <canvas id="overlay"></canvas>
           </div>
-          <div class="hint">Select ROI: left-drag; middle button pan; right toggles</div>
+          <div class="hint">ROI选择：点击"选择中心点"后在视频上点击；中键平移；右键切换ROI显示</div>
         </div>
       </div>
       <div class="panel">
