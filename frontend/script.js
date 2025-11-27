@@ -217,12 +217,43 @@ function renderResult(data){
   const ref = series.map(p=>p.ref);
   const dif = roi.map((v,i)=> v - ref[i]);
   const maxJump = (function(arr){ let m=0; for(let i=1;i<arr.length;i++){ m=Math.max(m, arr[i]-arr[i-1]); } return m; })(roi);
+
+  // 计算三条曲线的平均值
+  // 白色曲线：ROI实际灰度均值 (0-255)
+  const whiteAvg = roi.reduce((a,b)=>a+b,0)/Math.max(1,roi.length);
+
+  // 蓝色曲线：当前帧ROI均值 - 历史均值 (Δv)
+  const d1 = new Array(roi.length).fill(0);
+  let acc = 0;
+  for (let i=0;i<roi.length;i++){
+    if (i === 0){ d1[i] = 0; acc += roi[i]; continue; }
+    const prevMean = acc / i; // mean of roi[0..i-1]
+    d1[i] = roi[i] - prevMean;
+    acc += roi[i];
+  }
+  const blueAvg = d1.reduce((a,b)=>a+b,0)/Math.max(1,d1.length);
+
+  // 黄色曲线：蓝色曲线的一阶差分 d(Δv)
+  const d2 = d1.map((_,i)=> i>0 ? (d1[i]-d1[i-1]) : 0);
+  const yellowAvg = d2.reduce((a,b)=>a+b,0)/Math.max(1,d2.length);
+
+  // 调试信息：验证平均值计算
+  console.log('=== 曲线平均值计算结果 ===');
+  console.log(`数据点数量: ${roi.length}`);
+  console.log(`白色曲线 (ROI灰度): 平均值=${whiteAvg.toFixed(2)}, 范围=[${Math.min(...roi).toFixed(2)}, ${Math.max(...roi).toFixed(2)}]`);
+  console.log(`蓝色曲线 (Δv): 平均值=${blueAvg.toFixed(2)}, 范围=[${Math.min(...d1).toFixed(2)}, ${Math.max(...d1).toFixed(2)}]`);
+  console.log(`黄色曲线 (d(Δv)): 平均值=${yellowAvg.toFixed(2)}, 范围=[${Math.min(...d2).toFixed(2)}, ${Math.max(...d2).toFixed(2)}]`);
+  console.log('========================');
   const stats = [
     stat('Baseline', baseline.toFixed(2)),
-    stat('ROI mean', (roi.reduce((a,b)=>a+b,0)/Math.max(1,roi.length)).toFixed(2)),
+    stat('ROI mean', whiteAvg.toFixed(2)),
     stat('ROI max', Math.max(...roi).toFixed(2)),
     stat('Max jump', maxJump.toFixed(2)),
     stat('Max diff', Math.max(...dif).toFixed(2)),
+    // 曲线平均值统计
+    stat('Blue Avg Δv', blueAvg.toFixed(2)),
+    stat('White Avg Gray', whiteAvg.toFixed(2)),
+    stat('Yellow Avg d(Δv)', yellowAvg.toFixed(2)),
     stat('Duration', fmtTime(xs[xs.length-1]||0))
   ];
   statsBox.innerHTML = stats.join('');
