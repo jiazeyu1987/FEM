@@ -199,8 +199,17 @@ tbody tr:hover{background:#0b1220}
   border-color: #047857;
 }
 
-#exportBtn:hover {
+#exportBtn:hover, #exportCSVBtn:hover {
   background: #047857;
+}
+
+#exportCSVBtn {
+  background: #3b82f6;
+  border-color: #2563eb;
+}
+
+#exportCSVBtn:hover {
+  background: #2563eb;
 }
 
 /* ROI控件样式 */

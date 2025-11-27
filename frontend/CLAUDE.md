@@ -39,10 +39,10 @@ pip install -r backend/requirements.txt
 # Start backend server
 python backend/main.py
 # Or using uvicorn directly
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.main:app --host 0.0.0.0 --port 8421 --reload
 
 # Check health
-curl http://localhost:8000/health
+curl http://localhost:8421/health
 ```
 
 ### Full Stack Development
@@ -127,5 +127,5 @@ All detection parameters are configurable via frontend UI:
 
 - Frontend uses no build tools - direct file serving with cache-busting via query params
 - Backend requires OpenCV video codec support on the host system
-- Default ports: Backend (8000), Frontend (5173)
+- Default ports: Backend (8421), Frontend (5173)
 - Video files processed server-side, not in browser

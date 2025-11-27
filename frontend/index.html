@@ -93,11 +93,11 @@
               <div class="grid" style="margin-top: 10px;">
                 <label>
                   ROI宽度 (px)
-                  <input id="roi_width" type="number" min="30" max="100" step="1" value="60" />
+                  <input id="roi_width" type="number" min="30" max="100" step="1" value="80" />
                 </label>
                 <label>
                   ROI高度 (px)
-                  <input id="roi_height" type="number" min="30" max="100" step="1" value="60" />
+                  <input id="roi_height" type="number" min="30" max="100" step="1" value="160" />
                 </label>
               </div>
               <div class="roi-info" style="margin-top: 8px; font-size: 12px; color: var(--muted);">
@@ -105,9 +105,12 @@
               </div>
             </div>
           </div>
-          <div class="section">
-            <label class="label">高亮度像素阈值</label>
-            <input type="number" id="brightness_threshold" min="0" max="255" step="1" value="128" />
+          <div class="section" id="thresholdInfoSection" style="display: none;">
+            <label class="label">当前高亮度像素阈值</label>
+            <div id="currentThresholdInfo" style="color: var(--text); font-weight: 600;">-</div>
+            <div style="margin-top: 5px; font-size: 11px; color: var(--muted);">
+              批量分析将测试 60-200 范围内的15个阈值
+            </div>
           </div>
           <div class="section">
             <label class="label"><span id="shade_title">Timeline Shading</span></label>
@@ -121,7 +124,10 @@
             <label class="label">批量分析结果</label>
             <div class="batch-summary">
               <div id="batchSummaryContent"></div>
-              <button id="exportBtn" style="width: 100%; margin-top: 10px;">导出为MD文件</button>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+                <button id="exportBtn">导出为MD文件</button>
+                <button id="exportCSVBtn">导出为CSV文件</button>
+              </div>
             </div>
           </div>
               </aside>
@@ -148,6 +154,7 @@
           <div class="curve-toggle">
             <label><input type="checkbox" id="showBlue" checked> Blue Delta v</label>
             <label><input type="checkbox" id="showYellow" checked> Yellow Brightness %</label>
+            <label><input type="checkbox" id="showWhite" checked> White ROI Mean</label>
           </div>
           <div class="judge">
             <label style="display:flex;flex-direction:column;font-size:12px;color:#cbd5e1">
