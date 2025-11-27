@@ -582,6 +582,44 @@ function getThresholds(){
     if (max - min < 0.5){ const c = (min+max)/2; min = c - 0.25; max = c + 0.25; }
     return [min, max];
   }
+  function logCurrentCurveValues(){
+    if (!analyzedSeries || !analyzedSeries.length || !analyzedXs || !analyzedXs.length) return;
+
+    // Get current time position from video or timeline center
+    let currentTime = video.currentTime;
+    if (isNaN(currentTime) || currentTime <= 0) {
+      // If video time is not available, use timeline center
+      currentTime = (timelineState.min + timelineState.max) / 2;
+    }
+
+    // Calculate curve values
+    const v = analyzedSeries.map(p=>p.roi);           // ROI实际灰度均值 (白线)
+    const d1 = v.map((_,i)=> i>0 ? (v[i]-v[i-1]) : 0);  // 相邻帧灰度均值差 Δv (蓝线)
+    const d2 = d1.map((_,i)=> i>1 ? (d1[i]-d1[i-1]) : 0); // 差值变化 d(Δv) (橙线/黄线)
+
+    // Find closest data point to current time
+    let closestIdx = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < analyzedXs.length; i++) {
+      const dist = Math.abs(analyzedXs[i] - currentTime);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = i;
+      }
+    }
+
+    // Get values at closest point
+    const whiteValue = v[closestIdx];
+    const blueValue = d1[closestIdx];
+    const yellowValue = d2[closestIdx];
+    const actualTime = analyzedXs[closestIdx];
+
+    console.log(`时间位置 ${actualTime.toFixed(2)}s:`);
+    console.log(`  白线 (ROI灰度): ${whiteValue.toFixed(1)}`);
+    console.log(`  蓝线 (Δv): ${blueValue.toFixed(2)}`);
+    console.log(`  黄线 (d(Δv)): ${yellowValue.toFixed(2)}`);
+  }
+
   function rerenderAll(){
     if (analyzedSeries && analyzedSeries.length){
       renderChart(analyzedXs, analyzedSeries, analyzedBaseline, analyzedEvents);
@@ -590,7 +628,7 @@ function getThresholds(){
   timeline.addEventListener('click', (e)=>{
     const rect = timeline.getBoundingClientRect(); const x = e.clientX - rect.left; const W = rect.width;
     const t = timelineState.min + (x / Math.max(1, W)) * (timelineState.max - timelineState.min);
-    if (isFinite(t) && !isNaN(t)){ video.currentTime = t; renderTimeline(); rerenderAll(); }
+    if (isFinite(t) && !isNaN(t)){ video.currentTime = t; renderTimeline(); rerenderAll(); logCurrentCurveValues(); }
   });
   timeline.addEventListener('wheel', (e)=>{
     if (timelineState.fullMax <= timelineState.fullMin) return;
@@ -603,7 +641,7 @@ function getThresholds(){
     let newView = Math.min(timelineState.fullMax - timelineState.fullMin, Math.max(0.5, view * factor));
     let min = center - frac * newView; let max = min + newView;
     [timelineState.min, timelineState.max] = clampRange(min, max);
-    renderTimeline(); rerenderAll();
+    renderTimeline(); rerenderAll(); logCurrentCurveValues();
   }, { passive:false });
   let drag = { active:false, mode:'scrub', lastX:0 };
   timeline.addEventListener('mousedown', (e)=>{ drag.active = true; drag.mode = e.ctrlKey ? 'pan' : 'scrub'; drag.lastX = e.clientX; if (drag.mode==='scrub') timeline.dispatchEvent(new MouseEvent('mousemove', e)); });
@@ -617,16 +655,16 @@ function getThresholds(){
       const dt = - dx / Math.max(1, W) * view;
       let min = timelineState.min + dt; let max = timelineState.max + dt;
       [timelineState.min, timelineState.max] = clampRange(min, max);
-      renderTimeline(); rerenderAll();
+      renderTimeline(); rerenderAll(); logCurrentCurveValues();
     } else {
       const x = e.clientX - rect.left; const W = rect.width;
       const t = timelineState.min + (x / Math.max(1, W)) * (timelineState.max - timelineState.min);
-      if (isFinite(t) && !isNaN(t)){ video.currentTime = clamp(t, timelineState.fullMin, timelineState.fullMax); renderTimeline(); rerenderAll(); }
+      if (isFinite(t) && !isNaN(t)){ video.currentTime = clamp(t, timelineState.fullMin, timelineState.fullMax); renderTimeline(); rerenderAll(); logCurrentCurveValues(); }
     }
   });
 
   // keep timeline current-time indicator in sync
-  video.addEventListener('timeupdate', ()=>{ renderTimeline(); rerenderAll(); });
+  video.addEventListener('timeupdate', ()=>{ renderTimeline(); rerenderAll(); logCurrentCurveValues(); });
   // keep chart/timeline in sync on window resize
   window.addEventListener('resize', ()=>{ renderTimeline(); rerenderAll(); });
   // re-compute shaded intervals when thresholds change
