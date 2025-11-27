@@ -55,7 +55,7 @@ HEM/
     ```bash
     python backend/main.py
     # 或
-    uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn backend.main:app --host 0.0.0.0 --port 8421 --reload
     ```
 *   **API接口**:
     *   `GET /health`: 健康检查。
@@ -107,4 +107,4 @@ HEM/
 
 *   **后端**: 遵循FastAPI的开发规范。
 *   **前端**: 使用原生JavaScript，无框架依赖。
-*   **API**: 前后端通过RESTful API进行通信，默认地址为 `http://localhost:8000`。
+*   **API**: 前后端通过RESTful API进行通信，默认地址为 `http://localhost:8421`。

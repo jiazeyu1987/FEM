@@ -14,6 +14,7 @@
   const timeline = document.getElementById('timeline');
   const showBlueEl = document.getElementById('showBlue');
   const showYellowEl = document.getElementById('showYellow');
+  const showWhiteEl = document.getElementById('showWhite');
   const sampleFpsEl = document.getElementById('sampleFps');
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
@@ -41,7 +42,7 @@
   let panX = 0, panY = 0; // videoWrap translation in panel pixels
   let isPanning = false; let panStart = {x:0,y:0}; let panOrigin = {x:0,y:0};
   let roiVisible = true;
-  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), yZoom: 1, padLeft: 56 };
+  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhite: (showWhiteEl? showWhiteEl.checked : true), yZoom: 1, padLeft: 56 };
 
   // Load video preview
   fileInput.addEventListener('change', () => {
@@ -176,7 +177,7 @@
       // attach parameters (optional)
       Object.entries(p).forEach(([key, el])=>{ if (el && el.value !== '') fd.append(key, String(el.value)); });
 
-      const resp = await fetch('http://localhost:8000/analyze', { method:'POST', body: fd });
+      const resp = await fetch('http://localhost:8421/analyze', { method:'POST', body: fd });
       if (!resp.ok){ throw new Error('后端分析失败'); }
       const data = await resp.json();
       renderResult(data);
@@ -346,12 +347,23 @@ function getThresholds(){
     xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x = x2px(t), y = y2px(d2[i]); const prev = i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
     ctx.stroke();
 
+    // ROI实际灰度均值（白）- 如果启用
+    if (chartState.showWhite){
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath();
+      xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x = x2px(t), y = y2px(v[i]); const prev = i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
+      ctx.stroke();
+    }
+
     // 坐标含义说明
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#93c5fd';
     ctx.fillText('蓝: Δv  X=时间(s)  Y=灰度均值差', pad, 14);
     ctx.fillStyle = '#fbbf24';
     ctx.fillText('橙: d(Δv)  X=时间(s)  Y=差值变化', pad, 28);
+    if (chartState.showWhite){
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('白: ROI实际灰度  X=时间(s)  Y=灰度值', pad, 42);
+    }
 
     // 当前时间指示线
     if (!isNaN(video.currentTime)){
@@ -617,6 +629,7 @@ function getThresholds(){
     const parts = [];
     if (chartState.showBlue) parts.push(inView(d1).length? inView(d1):d1);
     if (chartState.showYellow) parts.push(inView(d2).length? inView(d2):d2);
+    if (chartState.showWhite) parts.push(inView(v).length? inView(v):v);
     if (!parts.length){
       // nothing selected, just draw axis baseline
       const padLeft = 56, padRight = 10, padTop = 16, padBottom = 22;
@@ -652,12 +665,18 @@ function getThresholds(){
       xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x=x2px(t), y=y2px(d2[i]); const prev=i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
       ctx.stroke();
     }
+    if (chartState.showWhite){
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath();
+      xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x=x2px(t), y=y2px(v[i]); const prev=i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
+      ctx.stroke();
+    }
 
     // labels for meaning
     let tx = padLeft + 4; let ty = padTop - 2; ty = Math.max(14, ty);
     ctx.font = '12px sans-serif';
     if (chartState.showBlue){ ctx.fillStyle = '#93c5fd'; ctx.fillText('蓝: 当前帧ROI均值 − 历史均值  X=时间(s)  Y=差值', tx, 14); }
     if (chartState.showYellow){ ctx.fillStyle = '#fbbf24'; ctx.fillText('黄: 上述差值的一阶差分  X=时间(s)  Y=变化量', tx, 28); }
+    if (chartState.showWhite){ ctx.fillStyle = '#ffffff'; ctx.fillText('白: ROI实际灰度均值  X=时间(s)  Y=灰度值', tx, 42); }
 
     // current time line
     if (!isNaN(video.currentTime)){
@@ -669,9 +688,10 @@ function getThresholds(){
   }
 
   // toggles
-  function syncToggles(){ chartState.showBlue = !!(showBlueEl?.checked ?? true); chartState.showYellow = !!(showYellowEl?.checked ?? true); rerenderAll(); }
+  function syncToggles(){ chartState.showBlue = !!(showBlueEl?.checked ?? true); chartState.showYellow = !!(showYellowEl?.checked ?? true); chartState.showWhite = !!(showWhiteEl?.checked ?? true); rerenderAll(); }
   showBlueEl?.addEventListener('change', syncToggles);
   showYellowEl?.addEventListener('change', syncToggles);
+  showWhiteEl?.addEventListener('change', syncToggles);
 
 })();
 
