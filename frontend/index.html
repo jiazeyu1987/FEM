@@ -71,6 +71,47 @@
               <label><span id="fall_label">Fall Threshold (-)</span><input id="p_fall_thresh" type="number" step="0.1" value="-3"></label>
             </div>
           </div>
+          <div class="section batch-section">
+            <label class="label">批量分析</label>
+            <div class="batch-controls">
+              <div class="batch-file-section">
+                <div class="drop-zone" id="dropZone">
+                  <div class="drop-zone-content">
+                    <p class="drop-zone-text">拖拽视频文件到此处</p>
+                    <p class="drop-zone-text">或</p>
+                    <input type="file" id="batchFileInput" multiple accept="video/mp4" style="display: none;">
+                    <button type="button" id="batchLoadBtn" class="batch-btn secondary">批量加载</button>
+                  </div>
+                </div>
+                <div class="batch-file-list" id="batchFileList" style="display: none;">
+                  <div class="file-list-header">
+                    <span>已选择文件 (<span id="fileCount">0</span>)</span>
+                    <button type="button" id="clearFilesBtn" class="clear-btn-small">清空</button>
+                  </div>
+                  <div class="file-list-items" id="fileListItems"></div>
+                </div>
+              </div>
+              <div class="batch-action-section">
+                <button type="button" id="batchAnalyzeBtn" class="batch-btn primary" disabled>批量分析</button>
+                <div class="batch-progress" id="batchProgress" style="display: none;">
+                  <div class="progress-header">
+                    <span>批量分析进度</span>
+                    <span id="progressText">0%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                  </div>
+                  <div class="batch-status" id="batchStatus">准备就绪</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="section video-selector">
+            <label class="label">视频选择</label>
+            <select id="videoSelector" class="video-select" disabled>
+              <option value="">请先分析视频</option>
+            </select>
+          </div>
           <div class="section info-panel">
             <label class="label">时间轴信息</label>
             <div class="info-panel-content">
@@ -151,7 +192,7 @@
 </main>
       </div>
     </div>
-    <script src="script.js?v=hem10-info-panel"></script>
+    <script src="script.js?v=hem11-functions-complete"></script>
   </body>
   </html>
 

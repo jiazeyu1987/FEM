@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>批量分析功能测试</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: #252526;
+            border: 1px solid #3c3c3c;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #e5e5e5;
+            font-size: 18px;
+        }
+        .test-section p {
+            color: #9da0a6;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .test-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .test-btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .test-btn.primary {
+            background: #0e639c;
+            color: white;
+        }
+        .test-btn.primary:hover {
+            background: #0b5a86;
+        }
+        .test-btn.secondary {
+            background: #374151;
+            color: white;
+        }
+        .test-btn.secondary:hover {
+            background: #1f2937;
+        }
+        .test-btn.danger {
+            background: #dc2626;
+            color: white;
+        }
+        .test-btn.danger:hover {
+            background: #b91c1c;
+        }
+        .test-status {
+            background: #1f2937;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+        .features-list {
+            background: #374151;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .feature-item:last-child {
+            margin-bottom: 0;
+        }
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            background: #22c55e;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .feature-icon.pending {
+            background: #f59e0b;
+        }
+        .feature-icon.processing {
+            background: #3b82f6;
+        }
+        .feature-icon.completed {
+            background: #10b981;
+        }
+        .feature-text {
+            color: #e5e5e7;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 style="text-align: center; margin-bottom: 30px;">批量分析功能测试页面</h1>
+
+        <div class="test-section">
+            <h2>🎯 功能概述</h2>
+            <p>
+                本页面演示了批量分析功能的核心特性，包括多文件选择、拖拽上传、批量处理队列、进度跟踪和结果切换等功能。
+            </p>
+
+            <div class="features-list">
+                <div class="feature-item">
+                    <div class="feature-icon completed">✓</div>
+                    <div class="feature-text">多文件选择和拖拽上传</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon completed">✓</div>
+                    <div class="feature-text">批量处理队列引擎</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon completed">✓</div>
+                    <div class="feature-text">实时进度跟踪和状态显示</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon completed">✓</div>
+                    <div class="feature-text">视频选择下拉框</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon completed">✓</div>
+                    <div class="feature-text">分析结果切换显示</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon completed">✓</div>
+                    <div class="feature-text">错误处理和恢复</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 测试控制</h2>
+            <p>以下测试功能模拟批量分析的完整流程：</p>
+
+            <div class="test-controls">
+                <button id="testFileList" class="test-btn primary">模拟文件列表</button>
+                <button id="testBatchProcess" class="test-btn secondary">模拟批量处理</button>
+                <button id="testProgress" class="test-btn secondary">测试进度跟踪</button>
+                <button id="testVideoSwitch" class="test-btn primary">测试视频切换</button>
+                <button id="clearAll" class="test-btn danger">清除所有</button>
+            </div>
+
+            <div id="testStatus" class="test-status">等待测试...</div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 使用说明</h2>
+            <p><strong>在实际应用中使用批量分析功能：</strong></p>
+            <ol style="color: #9da0a6; font-size: 14px; line-height: 1.6;">
+                <li>点击<strong>批量加载</strong>按钮选择多个MP4视频文件</li>
+                <li>或直接拖拽视频文件到<strong>拖拽区域</strong></li>
+<li>查看已选择文件列表，可以移除不需要的文件</li>
+                <li>点击<strong>批量分析</strong>开始自动处理队列</li>
+                <li>观察实时进度和状态信息</li>
+                <li>分析完成后，使用<strong>视频选择下拉框</strong>切换查看不同视频的分析结果</li>
+                <li>信息面板会显示当前选中视频的曲线值</li>
+                <li>时间轴点击功能适用于所有已分析的视频</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h2>⚙️ 技术特性</h2>
+            <p><strong>批量分析系统的技术实现：</strong></p>
+            <ul style="color: #9da0a6; font-size: 14px; line-height: 1.6;">
+                <li><strong>队列处理</strong>：顺序处理避免服务器过载</li>
+                <li><strong>默认ROI</strong>：自动使用中心50%区域作为ROI</li>
+                <li><strong>内存管理</strong>：高效的存储和切换机制</li>
+                <li><strong>错误恢复</strong>：单个失败不影响整体处理</li>
+                <li><strong>进度可视化</strong>：整体和单个视频的进度显示</li>
+                <li><strong>异步处理</strong>：非阻塞的用户界面</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test simulation variables
+        let testBatchFiles = [];
+        let testAnalyses = new Map();
+        let testProcessing = false;
+        let testCurrentIndex = 0;
+
+        // Mock analysis data generator
+        function generateMockAnalysis(file) {
+            const duration = 10 + Math.random() * 10; // 10-20 seconds
+            const fps = 8;
+            const frames = Math.floor(duration * fps);
+
+            const series = [];
+            for (let i = 0; i < frames; i++) {
+                const t = i / fps;
+                const baseValue = 128;
+                const variation = Math.sin(t * 0.5) * 30 + Math.random() * 10 - 5;
+                const roiValue = Math.max(0, Math.min(255, baseValue + variation));
+                series.push({
+                    t: t,
+                    roi: roiValue,
+                    ref: 128 + Math.random() * 5 - 2.5
+                });
+            }
+
+            return {
+                id: file.name + '_' + file.size,
+                fileName: file.name,
+                file: file,
+                status: 'completed',
+                progress: 100,
+                error: null,
+                results: {
+                    has_hem: Math.random() > 0.6,
+                    events: Array.from({length: Math.floor(Math.random() * 5)}, (_, i) => ({
+                        t: Math.random() * duration,
+                        type: ['sudden', 'threshold', 'relative'][Math.floor(Math.random() * 3)],
+                        score: Math.random() * 100
+                    })),
+                    baseline: 120 + Math.random() * 20,
+                    series: series
+                }
+            };
+        }
+
+        // Test functions
+        function updateTestStatus(message) {
+            document.getElementById('testStatus').textContent = new Date().toLocaleTimeString() + ' - ' + message;
+        }
+
+        // Event listeners
+        document.getElementById('testFileList').addEventListener('click', () => {
+            // Simulate loading multiple files
+            testBatchFiles = [
+                { name: 'test_video_001.mp4', size: 1024000, type: 'video/mp4' },
+                { name: 'test_video_002.mp4', size: 2048000, type: 'video/mp4' },
+                { name: 'medical_scan_001.mp4', size: 5120000, type: 'video/mp4' },
+                { name: 'medical_scan_002.mp4', size: 3072000, type: 'video/mp4' }
+            ];
+            updateTestStatus(`模拟加载 ${testBatchFiles.length} 个文件: ${testBatchFiles.map(f => f.name).join(', ')}`);
+            console.log('📁 模拟文件列表:', testBatchFiles);
+        });
+
+        document.getElementById('testBatchProcess').addEventListener('click', async () => {
+            if (testBatchFiles.length === 0) {
+                updateTestStatus('请先模拟加载文件');
+                return;
+            }
+
+            testProcessing = true;
+            testCurrentIndex = 0;
+            updateTestStatus('开始批量处理...');
+
+            // Process files with realistic timing
+            for (let i = 0; i < testBatchFiles.length; i++) {
+                if (!testProcessing) break;
+
+                testCurrentIndex = i;
+                const file = testBatchFiles[i];
+                updateTestStatus(`正在处理 ${i + 1}/${testBatchFiles.length}: ${file.name}`);
+
+                // Simulate processing delay
+                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+
+                // Generate mock analysis
+                const analysis = generateMockAnalysis(file);
+                testAnalyses.set(analysis.id, analysis);
+
+                updateTestStatus(`已完成 ${i + 1}/${testBatchFiles.length}: ${file.name} (检测到 ${analysis.results.events.length} 个HEM事件)`);
+            }
+
+            testProcessing = false;
+            updateTestStatus(`批量处理完成！共处理 ${testBatchFiles.length} 个文件`);
+            console.log('✅ 批量处理完成，分析结果:', testAnalyses);
+        });
+
+        document.getElementById('testProgress').addEventListener('click', () => {
+            if (testBatchFiles.length === 0) {
+                updateTestStatus('没有可显示的进度数据');
+                return;
+            }
+
+            const progress = testProcessing ? testCurrentIndex : testBatchFiles.length;
+            const percentage = Math.round((progress / testBatchFiles.length) * 100);
+            updateTestStatus(`进度跟踪: ${progress}/${testBatchFiles.length} (${percentage}%)`);
+
+            // Show detailed progress info
+            if (testAnalyses.size > 0) {
+                const analyses = Array.from(testAnalyses.values());
+                const totalEvents = analyses.reduce((sum, a) => sum + a.results.events.length, 0);
+                const hemDetected = analyses.filter(a => a.results.has_hem).length;
+                updateTestStatus(`进度跟踪: ${progress}/${testBatchFiles.length} (${percentage}%) | 总事件: ${totalEvents} | HEM检测: ${hemDetected}`);
+            }
+        });
+
+        document.getElementById('testVideoSwitch').addEventListener('click', () => {
+            if (testAnalyses.size === 0) {
+                updateTestStatus('没有可切换的分析结果');
+                return;
+            }
+
+            const analyses = Array.from(testAnalyses.values());
+            const currentIndex = analyses.findIndex(a => a.id === (window.currentTestVideoId || ''));
+            const nextIndex = (currentIndex + 1) % analyses.length;
+            const nextAnalysis = analyses[nextIndex];
+
+            window.currentTestVideoId = nextAnalysis.id;
+            updateTestStatus(`切换到视频: ${nextAnalysis.fileName}`);
+            updateTestStatus(`切换详情: 时长 ${nextAnalysis.results.series[nextAnalysis.results.series.length-1].t.toFixed(1)}s | 事件数: ${nextAnalysis.results.events.length} | HEM: ${nextAnalysis.results.has_hem ? '是' : '否'}`);
+
+            console.log('🔄 切换到分析:', nextAnalysis);
+        });
+
+        document.getElementById('clearAll').addEventListener('click', () => {
+            testBatchFiles = [];
+            testAnalyses.clear();
+            testProcessing = false;
+            testCurrentIndex = 0;
+            window.currentTestVideoId = null;
+            updateTestStatus('已清除所有测试数据');
+            console.log('🗑️ 清除完成');
+        });
+
+        // Initialize
+        updateTestStatus('批量分析测试页面已加载，点击按钮开始测试');
+        console.log('🎯 批量分析测试页面准备完成');
+    </script>
+</body>
+</html>

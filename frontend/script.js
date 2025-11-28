@@ -1,4 +1,4 @@
-(function(){
+{ // Script scope
   // FE build/version marker for cache-busting verification
   console.log('HEM FE version: two-curves-no-ticks v2025-11-06');
   const fileInput = document.getElementById('fileInput');
@@ -24,6 +24,22 @@
   const infoWhiteValueEl = document.getElementById('infoWhiteValue');
   const infoStatusEl = document.getElementById('infoStatus');
   const clearInfoBtn = document.getElementById('clearInfoBtn');
+
+  // Batch analysis elements
+  const batchFileInput = document.getElementById('batchFileInput');
+  const batchLoadBtn = document.getElementById('batchLoadBtn');
+  const dropZone = document.getElementById('dropZone');
+  const batchFileList = document.getElementById('batchFileList');
+  const fileListItems = document.getElementById('fileListItems');
+  const fileCount = document.getElementById('fileCount');
+  const clearFilesBtn = document.getElementById('clearFilesBtn');
+  const batchAnalyzeBtn = document.getElementById('batchAnalyzeBtn');
+  const batchProgress = document.getElementById('batchProgress');
+  const progressText = document.getElementById('progressText');
+  const progressFill = document.getElementById('progressFill');
+  const batchStatus = document.getElementById('batchStatus');
+  const videoSelector = document.getElementById('videoSelector');
+
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
   // parameter inputs
@@ -65,9 +81,21 @@
   let placingCenter = false;
   const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), yZoom: 1, padLeft: 56 };
 
+  // Batch analysis variables
+  const batchAnalyses = new Map(); // videoId -> analysisData
+  let currentVideoId = null;        // Currently displayed analysis ID
+  let batchFiles = [];               // Array of selected files
+  const batchQueue = {
+    videos: [],           // Array of analysisData
+    processing: false,    // Whether batch processing is active
+    currentIndex: 0,      // Currently processing video index
+    paused: false,        // Whether processing is paused
+    cancelled: false      // Whether batch was cancelled
+  };
+
   // Load video preview
   fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
+    const file = fileInput.files && fileInput.files[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
     video.src = url;
@@ -88,6 +116,15 @@
     videoWrap.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     drawOverlay();
   };
+
+  function applyExistingRoiToOverlay() {
+    // Check if there's a valid ROI and apply it to the overlay
+    if (roi && roi.w > 0 && roi.h > 0) {
+      drawOverlay();
+      return true;
+    }
+    return false;
+  }
 
   function autoFitHeight(){
     // Fit video height to available box height while keeping aspect ratio
@@ -181,19 +218,23 @@
   });
 
   // Add event listeners for dimension inputs
-  roiWidthInput?.addEventListener('input', () => {
-    roiDimensions.w = parseInt(roiWidthInput.value) || 100;
-    if (roiMode === 'center' && roiCenter) {
-      updateRoiFromCenter();
-    }
-  });
+  if (roiWidthInput) {
+    roiWidthInput.addEventListener('input', () => {
+      roiDimensions.w = parseInt(roiWidthInput.value) || 100;
+      if (roiMode === 'center' && roiCenter) {
+        updateRoiFromCenter();
+      }
+    });
+  }
 
-  roiHeightInput?.addEventListener('input', () => {
-    roiDimensions.h = parseInt(roiHeightInput.value) || 200;
-    if (roiMode === 'center' && roiCenter) {
-      updateRoiFromCenter();
-    }
-  });
+  if (roiHeightInput) {
+    roiHeightInput.addEventListener('input', () => {
+      roiDimensions.h = parseInt(roiHeightInput.value) || 200;
+      if (roiMode === 'center' && roiCenter) {
+        updateRoiFromCenter();
+      }
+    });
+  }
 
   function centerToNormalized(center, dims, videoW, videoH) {
     return {
@@ -219,6 +260,118 @@
       analyzeBtn.disabled = false;
       updateRoiStatus();
     }
+  }
+
+  // Batch analysis functions
+  function generateVideoId(file) {
+    return file.name + '_' + file.size + '_' + file.lastModified;
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function addBatchFiles(files) {
+    const mp4Files = Array.from(files).filter(file => file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4'));
+
+    mp4Files.forEach(file => {
+      const videoId = generateVideoId(file);
+      if (!batchFiles.find(f => generateVideoId(f) === videoId)) {
+        batchFiles.push(file);
+      }
+    });
+
+    updateBatchFileList();
+  }
+
+  function removeBatchFile(videoId) {
+    const index = batchFiles.findIndex(file => generateVideoId(file) === videoId);
+    if (index !== -1) {
+      batchFiles.splice(index, 1);
+      updateBatchFileList();
+    }
+  }
+
+  function clearBatchFiles() {
+    batchFiles = [];
+    updateBatchFileList();
+  }
+
+  function updateBatchFileList() {
+    if (batchFiles.length === 0) {
+      batchFileList.style.display = 'none';
+      batchAnalyzeBtn.disabled = true;
+    } else {
+      batchFileList.style.display = 'block';
+      batchAnalyzeBtn.disabled = false;
+      fileCount.textContent = batchFiles.length;
+
+      // Update file list items
+      fileListItems.innerHTML = '';
+      batchFiles.forEach(file => {
+        const videoId = generateVideoId(file);
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+          <div class="file-item-info">
+            <div class="file-item-name" title="${file.name}">${file.name}</div>
+            <div class="file-item-size">${formatFileSize(file.size)}</div>
+          </div>
+          <div class="file-item-status">
+            <button class="file-item-remove" data-video-id="${videoId}">移除</button>
+          </div>
+        `;
+        fileListItems.appendChild(fileItem);
+      });
+
+      // Add remove event listeners
+      document.querySelectorAll('.file-item-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const videoId = e.target.getAttribute('data-video-id');
+          removeBatchFile(videoId);
+        });
+      });
+    }
+  }
+
+  function updateBatchProgress(current, total, status) {
+    const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+    progressText.textContent = `${percentage}% (${current}/${total})`;
+    progressFill.style.width = `${percentage}%`;
+    batchStatus.textContent = status;
+  }
+
+  function showBatchProgress(show = true) {
+    batchProgress.style.display = show ? 'block' : 'none';
+  }
+
+  function createAnalysisData(file) {
+    const videoId = generateVideoId(file);
+    return {
+      id: videoId,
+      fileName: file.name,
+      file: file,
+      status: 'pending',
+      progress: 0,
+      error: null,
+      roi: null, // Will be set when user selects ROI for this video
+      results: {
+        has_hem: false,
+        events: [],
+        baseline: 0,
+        series: []
+      },
+      metadata: {
+        duration: 0,
+        fps: 8,
+        width: 0,
+        height: 0
+      }
+    };
   }
   overlay.addEventListener('mousedown', (e)=>{
     if (e.button === 1){ // middle button: pan
@@ -267,7 +420,7 @@
         w: rectPx.w / overlay.width,
         h: rectPx.h / overlay.height,
       };
-      analyzeBtn.disabled = !fileInput.files?.[0];
+      analyzeBtn.disabled = !(fileInput.files && fileInput.files[0]);
       statusEl.textContent = `ROI = x:${roi.x.toFixed(3)}, y:${roi.y.toFixed(3)}, w:${roi.w.toFixed(3)}, h:${roi.h.toFixed(3)}`;
     }
   }
@@ -293,7 +446,7 @@
   }
 
   analyzeBtn.addEventListener('click', async ()=>{
-    const file = fileInput.files?.[0];
+    const file = fileInput.files && fileInput.files[0];
     if (!file){ alert('请先选择视频'); return; }
     if (!roi){ alert('请在视频上框选ROI'); return; }
     resultText.textContent = '分析中…';
@@ -938,17 +1091,26 @@ function getThresholds(){
   }
 
   // toggles
-  function syncToggles(){ chartState.showBlue = !!(showBlueEl?.checked ?? true); chartState.showYellow = !!(showYellowEl?.checked ?? true); chartState.showWhiteRoi = !!(showWhiteRoiEl?.checked ?? true); rerenderAll(); }
-  showBlueEl?.addEventListener('change', syncToggles);
-  showYellowEl?.addEventListener('change', syncToggles);
-  showWhiteRoiEl?.addEventListener('change', syncToggles);
+  function syncToggles(){
+    chartState.showBlue = showBlueEl ? showBlueEl.checked : true;
+    chartState.showYellow = showYellowEl ? showYellowEl.checked : true;
+    chartState.showWhiteRoi = showWhiteRoiEl ? showWhiteRoiEl.checked : true;
+    rerenderAll();
+  }
+  if (showBlueEl) {
+    showBlueEl.addEventListener('change', syncToggles);
+  }
+  if (showYellowEl) {
+    showYellowEl.addEventListener('change', syncToggles);
+  }
+  if (showWhiteRoiEl) {
+    showWhiteRoiEl.addEventListener('change', syncToggles);
+  }
 
   // Clear information panel button
-  clearInfoBtn?.addEventListener('click', clearInfoPanel);
-
-})();
-
-
+  if (clearInfoBtn) {
+    clearInfoBtn.addEventListener('click', clearInfoPanel);
+  }
 
 
 
@@ -969,4 +1131,228 @@ function getThresholds(){
 
 
 
-blueMaxThreshEl?.addEventListener('input', ()=>{ updateBlueJudge(); });
+
+
+// Batch processing queue engine
+  async function processBatchQueue() {
+    if (batchFiles.length === 0) {
+      alert('请先加载视频文件');
+      return;
+    }
+
+    batchQueue.videos = batchFiles.map(file => createAnalysisData(file));
+    batchQueue.processing = true;
+    batchQueue.currentIndex = 0;
+    batchQueue.paused = false;
+    batchQueue.cancelled = false;
+
+    showBatchProgress(true);
+    updateBatchProgress(0, batchQueue.videos.length, '开始批量分析...');
+
+    for (let i = 0; i < batchQueue.videos.length; i++) {
+      if (batchQueue.cancelled) {
+        updateBatchProgress(i, batchQueue.videos.length, '批量分析已取消');
+        break;
+      }
+
+      while (batchQueue.paused) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      const analysisData = batchQueue.videos[i];
+      batchQueue.currentIndex = i;
+
+      try {
+        analysisData.status = 'processing';
+        updateBatchProgress(i, batchQueue.videos.length, `正在分析: ${analysisData.fileName}`);
+
+        // Use default ROI for batch processing (centered 50% area)
+        const defaultRoi = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+
+        // Create form data for analysis
+        const formData = new FormData();
+        formData.append('file', analysisData.file);
+        formData.append('roi_x', String(defaultRoi.x));
+        formData.append('roi_y', String(defaultRoi.y));
+        formData.append('roi_w', String(defaultRoi.w));
+        formData.append('roi_h', String(defaultRoi.h));
+        formData.append('sample_fps', String(Number(sampleFpsEl?.value || 8)));
+        formData.append('methods', 'sudden,threshold,relative');
+
+        // Add parameters
+        Object.entries(p).forEach(([key, el]) => {
+          if (el && el.value !== '') formData.append(key, String(el.value));
+        });
+
+        const response = await fetch('http://localhost:8421/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Store analysis results
+        analysisData.status = 'completed';
+        analysisData.results = data;
+        analysisData.roi = defaultRoi;
+        analysisData.progress = 100;
+
+        // Add to batch analyses map
+        batchAnalyses.set(analysisData.id, analysisData);
+
+        // Add to video selector
+        addVideoToSelector(analysisData.id, analysisData.fileName);
+
+        updateBatchProgress(i + 1, batchQueue.videos.length, `已完成: ${analysisData.fileName}`);
+
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error('Batch analysis error:', error);
+        analysisData.status = 'error';
+        analysisData.error = error.message;
+        updateBatchProgress(i + 1, batchQueue.videos.length, `错误: ${analysisData.fileName} - ${error.message}`);
+      }
+    }
+
+    batchQueue.processing = false;
+    updateBatchProgress(batchQueue.videos.length, batchQueue.videos.length, '批量分析完成');
+
+    // Select first completed analysis if available
+    const completedAnalyses = Array.from(batchAnalyses.values()).filter(a => a.status === 'completed');
+    if (completedAnalyses.length > 0 && !currentVideoId) {
+      selectAnalysis(completedAnalyses[0].id);
+    }
+  }
+
+  function addVideoToSelector(videoId, fileName) {
+    const option = document.createElement('option');
+    option.value = videoId;
+    option.textContent = fileName;
+    videoSelector.appendChild(option);
+    videoSelector.disabled = false;
+  }
+
+  function selectAnalysis(videoId) {
+    const analysisData = batchAnalyses.get(videoId);
+    if (!analysisData || analysisData.status !== 'completed') {
+      return;
+    }
+
+    currentVideoId = videoId;
+
+    // Update current analysis data
+    const { has_hem, events = [], baseline = 0, series = [] } = analysisData.results;
+    analyzedXs = series.map(p => p.t);
+    analyzedEvents = events;
+    analyzedBaseline = baseline;
+    analyzedSeries = series;
+
+    // Initialize timeline state (critical for timeline click functionality)
+    const seriesStart = analyzedXs.length ? analyzedXs[0] : 0;
+    const seriesEnd = analyzedXs.length ? analyzedXs[analyzedXs.length - 1] : 0;
+    timelineState.fullMin = seriesStart;
+    timelineState.fullMax = seriesEnd;
+    timelineState.min = seriesStart;
+    timelineState.max = seriesEnd;
+
+    // Recompute shaded intervals and update timeline
+    recomputeShadedIntervals();
+    renderTimeline();
+    updateBlueJudge();
+
+    // Update video selector
+    videoSelector.value = videoId;
+
+    // Re-render everything
+    rerenderAll();
+
+    // Update video if possible
+    if (analysisData.file) {
+      const url = URL.createObjectURL(analysisData.file);
+      video.src = url;
+      video.currentTime = 0;
+      analyzeBtn.disabled = false;
+      resultText.textContent = `已加载: ${analysisData.fileName}`;
+
+      // Update status with analysis info
+      const statusInfo = `视频: ${analysisData.fileName} | 检测到HEM: ${has_hem ? '是' : '否'} | 事件数: ${events.length}`;
+      if (statusEl) {
+        statusEl.textContent = statusInfo;
+      }
+    }
+
+    console.log('Switched to analysis:', videoId, analysisData.fileName);
+  }
+
+  // Batch analysis event listeners
+  if (batchLoadBtn) {
+    batchLoadBtn.addEventListener('click', () => {
+      batchFileInput.click();
+    });
+  }
+
+  if (batchFileInput) {
+    batchFileInput.addEventListener('change', (e) => {
+      addBatchFiles(e.target.files);
+    });
+  }
+
+  if (clearFilesBtn) {
+    clearFilesBtn.addEventListener('click', () => {
+      clearBatchFiles();
+    });
+  }
+
+  if (batchAnalyzeBtn) {
+    batchAnalyzeBtn.addEventListener('click', () => {
+      if (batchQueue.processing) {
+        if (confirm('批量分析正在进行中，确定要取消吗？')) {
+          batchQueue.cancelled = true;
+          batchQueue.processing = false;
+          showBatchProgress(false);
+        }
+      } else {
+        processBatchQueue();
+      }
+    });
+  }
+
+  // Drag and drop functionality
+  if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      addBatchFiles(e.dataTransfer.files);
+    });
+  }
+
+  // Video selector change event
+  if (videoSelector) {
+    videoSelector.addEventListener('change', (e) => {
+      const videoId = e.target.value;
+      if (videoId) {
+        selectAnalysis(videoId);
+      }
+    });
+  }
+
+  if (blueMaxThreshEl) {
+    blueMaxThreshEl.addEventListener('input', ()=>{ updateBlueJudge(); });
+  }
+} // Close script scope

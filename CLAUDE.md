@@ -62,6 +62,7 @@ docker run -p 8421:8421 hem-analyzer
   - `roi_x, roi_y, roi_w, roi_h`: Normalized ROI coordinates (0-1)
   - `sample_fps`: Analysis sampling rate (default 8)
   - `methods`: Detection methods (`sudden,threshold,relative`)
+  - Optional parameters: `smooth_k`, `baseline_n`, `sudden_k`, `sudden_min`, `threshold_delta`, `threshold_hold`, `relative_delta`
 
 ## Important Development Notes
 
@@ -75,7 +76,51 @@ docker run -p 8421:8421 hem-analyzer
 ## File Structure Context
 
 - `backend/main.py` - Main FastAPI application and video processing logic
-- `frontend/script.js` - Core frontend interaction logic (32KB)
+- `frontend/script.js` - Core frontend interaction logic (1345+ lines)
 - `frontend/styles.css` - VS Code-themed styling
-- `resource/` - Sample videos for testing
-- `check_syntax.js` - Debug utility for frontend development
+- `frontend/serve.py` - Development server with no-cache headers
+- `frontend/index.html` - Main application interface
+
+## Frontend Architecture Details
+
+### Core Components
+- **Video ROI Selection**: Interactive ROI with two modes:
+  - Drag mode: Left-drag to select rectangle
+  - Center-point mode: Click to set center with configurable dimensions
+- **Real-time Visualization**: Three analysis curves with toggles:
+  - Blue (Δv): Current frame ROI mean - historical mean
+  - Yellow (d(Δv)): First-order derivative of blue curve
+  - White: ROI average grayscale value
+- **Timeline Navigation**: Interactive timeline with zoom/pan and click-to-scrub
+- **Information Panel**: Shows curve values at clicked timestamps
+- **Batch Processing**: Multi-video analysis with progress tracking
+
+### Key JavaScript Modules
+- `renderChart()` - Main chart rendering with curve toggles and Y-axis zoom
+- `renderTimeline()` - Timeline with event markers and shaded intervals
+- `interpolateCurveValues()` - Linear interpolation for value display
+- `processBatchQueue()` - Async batch analysis engine
+- ROI interaction handlers for drag/center-point modes
+
+### Chart System
+- Custom Canvas-based rendering (no external libraries)
+- Synchronized chart-timeline view
+- Wheel zoom on Y-axis (when over chart area)
+- Timeline shading based on rise/fall thresholds
+
+## Backend Architecture Details
+
+### Video Processing Pipeline
+1. `sample_frames()` - Frame sampling at configurable FPS
+2. `compute_series()` - ROI and reference mean calculation
+3. `detect_events()` - Multi-method HEM detection with parameters
+4. Response format: `has_hem`, `events`, `baseline`, `series`
+
+### Detection Algorithm Parameters
+- `smooth_k`: Moving average window size
+- `baseline_n`: Number of samples for baseline calculation
+- `sudden_k`: Sudden detection threshold multiplier
+- `sudden_min`: Minimum jump threshold
+- `threshold_delta`: Threshold detection offset
+- `threshold_hold`: Minimum duration for threshold detection
+- `relative_delta`: Relative detection threshold
