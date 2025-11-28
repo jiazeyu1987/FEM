@@ -14,6 +14,7 @@
   const timeline = document.getElementById('timeline');
   const showBlueEl = document.getElementById('showBlue');
   const showYellowEl = document.getElementById('showYellow');
+  const showWhiteRoiEl = document.getElementById('showWhiteRoi');
   const sampleFpsEl = document.getElementById('sampleFps');
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
@@ -52,9 +53,9 @@
   // ROI mode variables
   let roiMode = 'drag'; // 'drag' or 'center'
   let roiCenter = null; // center point coordinates {x, y}
-  let roiDimensions = {w: 100, h: 100}; // pixel dimensions
+  let roiDimensions = {w: 100, h: 200}; // pixel dimensions
   let placingCenter = false;
-  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), yZoom: 1, padLeft: 56 };
+  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), yZoom: 1, padLeft: 56 };
 
   // Load video preview
   fileInput.addEventListener('change', () => {
@@ -180,7 +181,7 @@
   });
 
   roiHeightInput?.addEventListener('input', () => {
-    roiDimensions.h = parseInt(roiHeightInput.value) || 100;
+    roiDimensions.h = parseInt(roiHeightInput.value) || 200;
     if (roiMode === 'center' && roiCenter) {
       updateRoiFromCenter();
     }
@@ -333,8 +334,7 @@ function renderResult(data){
     statsBox.innerHTML = '';
     renderChart([], [], baseline, []);
     renderTimeline([], []);
-    renderEventsTable([]);
-    return;
+      return;
   }
 
   const xs = series.map(p=>p.t);
@@ -362,8 +362,7 @@ function renderResult(data){
   timelineState.min = seriesStart;
   timelineState.max = seriesEnd;
   renderTimeline();
-  renderEventsTable(events);
-  updateBlueJudge();
+    updateBlueJudge();
 }
 
 // thresholds helper (kept close to shading logic)
@@ -630,17 +629,8 @@ function getThresholds(){
     // curve toggle labels
     setLabelTextForInput('showBlue', 'Blue \\u0394v');
     setLabelTextForInput('showYellow', 'Yellow d(\\u0394v)');
-
-    // events pane and table headers
-    setText('.events-pane .panel-header, .events .events-header', '\u4E8B\u4EF6\u5217\u8868');
-    const ths = document.querySelectorAll('#eventsTable thead th');
-    if (ths && ths.length >= 3){
-      ths[0].textContent = 'Time';
-      ths[1].textContent = 'Type';
-      ths[2].textContent = 'Score';
-    }
+    setLabelTextForInput('showWhiteRoi', 'White ROI Avg');
   } catch (_) {}
-
   // zoom video with mouse wheel over video box
   document.querySelector('.video-box').addEventListener('wheel', (e)=>{
     // avoid interfering when user is over a scrollable element that is not videoWrap area
@@ -663,18 +653,7 @@ function getThresholds(){
     rerenderAll();
   }, { passive:false });
 
-  function renderEventsTable(events){
-    const tbody = document.querySelector('#eventsTable tbody');
-    tbody.innerHTML = '';
-    const rows = (events||[]).map(ev=>{
-      const t = fmtTime(ev.t||0);
-      const type = labelFor(ev.type);
-      const score = (ev.score!=null? ev.score.toFixed(2):'-');
-      return `<tr><td>${t}</td><td>${type}</td><td>${score}</td></tr>`;
-    }).join('');
-    tbody.innerHTML = rows || '<tr><td colspan="3" style="color:#9da0a6">无事件</td></tr>';
-  }
-  // ===== Enhanced chart with toggles and labeled Y axis =====
+    // ===== Enhanced chart with toggles and labeled Y axis =====
   function drawYAxis(ctx, W, H, padLeft, padRight, padTop, padBottom, minY, maxY, y2px){
     const ticks = niceTicks(minY, maxY, 5);
     ctx.save();
@@ -743,6 +722,7 @@ function getThresholds(){
     const parts = [];
     if (chartState.showBlue) parts.push(inView(d1).length? inView(d1):d1);
     if (chartState.showYellow) parts.push(inView(d2).length? inView(d2):d2);
+    if (chartState.showWhiteRoi) parts.push(inView(v).length? inView(v):v);
     if (!parts.length){
       // nothing selected, just draw axis baseline
       const padLeft = 56, padRight = 10, padTop = 16, padBottom = 22;
@@ -778,12 +758,28 @@ function getThresholds(){
       xs.forEach((t,i)=>{ if (t<minX || t>maxX) return; const x=x2px(t), y=y2px(d2[i]); const prev=i>0 && xs[i-1]>=minX; (prev?ctx.lineTo(x,y):ctx.moveTo(x,y)); });
       ctx.stroke();
     }
+    if (chartState.showWhiteRoi){
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 2;
+      ctx.beginPath();
+      xs.forEach((t,i)=>{
+        if (t<minX || t>maxX) return;
+        const x=x2px(t), y=y2px(v[i]);
+        const prev=i>0 && xs[i-1]>=minX;
+        (prev?ctx.lineTo(x,y):ctx.moveTo(x,y));
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
 
     // labels for meaning
     let tx = padLeft + 4; let ty = padTop - 2; ty = Math.max(14, ty);
     ctx.font = '12px sans-serif';
     if (chartState.showBlue){ ctx.fillStyle = '#93c5fd'; ctx.fillText('蓝: 当前帧ROI均值 − 历史均值  X=时间(s)  Y=差值', tx, 14); }
     if (chartState.showYellow){ ctx.fillStyle = '#fbbf24'; ctx.fillText('黄: 上述差值的一阶差分  X=时间(s)  Y=变化量', tx, 28); }
+    if (chartState.showWhiteRoi){ ctx.fillStyle = '#ffffff'; ctx.fillText('白: ROI平均灰度值  X=时间(s)  Y=灰度', tx, 42); }
 
     // current time line
     if (!isNaN(video.currentTime)){
@@ -795,9 +791,10 @@ function getThresholds(){
   }
 
   // toggles
-  function syncToggles(){ chartState.showBlue = !!(showBlueEl?.checked ?? true); chartState.showYellow = !!(showYellowEl?.checked ?? true); rerenderAll(); }
+  function syncToggles(){ chartState.showBlue = !!(showBlueEl?.checked ?? true); chartState.showYellow = !!(showYellowEl?.checked ?? true); chartState.showWhiteRoi = !!(showWhiteRoiEl?.checked ?? true); rerenderAll(); }
   showBlueEl?.addEventListener('change', syncToggles);
   showYellowEl?.addEventListener('change', syncToggles);
+  showWhiteRoiEl?.addEventListener('change', syncToggles);
 
 })();
 
