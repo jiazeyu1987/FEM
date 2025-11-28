@@ -71,6 +71,33 @@
               <label><span id="fall_label">Fall Threshold (-)</span><input id="p_fall_thresh" type="number" step="0.1" value="-3"></label>
             </div>
           </div>
+          <div class="section info-panel">
+            <label class="label">时间轴信息</label>
+            <div class="info-panel-content">
+              <div class="timestamp-display">
+                <span class="info-label">时间:</span>
+                <span id="infoTimestamp" class="info-value">--</span>
+              </div>
+              <div class="curve-values">
+                <div class="curve-value">
+                  <span class="curve-label blue">蓝:</span>
+                  <span id="infoBlueValue" class="curve-number">--</span>
+                </div>
+                <div class="curve-value">
+                  <span class="curve-label yellow">黄:</span>
+                  <span id="infoYellowValue" class="curve-number">--</span>
+                </div>
+                <div class="curve-value">
+                  <span class="curve-label white">白:</span>
+                  <span id="infoWhiteValue" class="curve-number">--</span>
+                </div>
+              </div>
+              <div class="info-status">
+                <span id="infoStatus" class="status-text">点击时间轴查看曲线值</span>
+              </div>
+              <button id="clearInfoBtn" class="clear-btn">清除信息</button>
+            </div>
+          </div>
           <div class="section small" id="status"></div>
         </aside>
 
@@ -124,7 +151,7 @@
 </main>
       </div>
     </div>
-    <script src="script.js?v=hem9-white-curve"></script>
+    <script src="script.js?v=hem10-info-panel"></script>
   </body>
   </html>
 

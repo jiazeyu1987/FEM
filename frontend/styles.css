@@ -56,3 +56,22 @@ thead{background:#111827;color:#cbd5e1}
 th,td{padding:6px 8px;border-bottom:1px solid var(--border)}
 tbody tr:hover{background:#0b1220}
 .chart-area{display:flex;flex-direction:column;gap:8px}
+
+/* Information Panel Styles */
+.info-panel{background:var(--panel);border:1px solid var(--border);border-radius:6px}
+.info-panel-content{padding:8px}
+.timestamp-display{display:flex;align-items:center;margin-bottom:8px;font-size:12px}
+.info-label{color:var(--muted);margin-right:4px;min-width:30px}
+.info-value{color:var(--text);font-weight:600;font-family:monospace}
+.curve-values{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.curve-value{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:2px 4px;background:#1f2937;border-radius:3px}
+.curve-label{font-weight:600;padding:2px 6px;border-radius:3px;color:#fff}
+.curve-label.blue{background:#4fc3f7}
+.curve-label.yellow{background:#fbbf24}
+.curve-label.white{background:#ffffff;color:#000}
+.curve-number{font-family:monospace;font-weight:600;color:#cbd5e1;min-width:60px;text-align:right}
+.info-status{margin-bottom:8px}
+.status-text{font-size:11px;color:var(--muted);font-style:italic}
+.clear-btn{width:100%;padding:6px 8px;background:#dc2626;color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;transition:background-color 0.2s}
+.clear-btn:hover{background:#b91c1c}
+.clear-btn:active{background:#991b1b}
