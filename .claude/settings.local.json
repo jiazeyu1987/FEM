@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(python:*)",
+      "Bash(where:*)",
+      "Bash(/c/Users/BJB110/AppData/Local/Microsoft/WindowsApps/python:*)",
+      "Bash(cat:*)",
+      "Bash(node:*)",
+      "Bash(\"D:/ProjectPackage/FEM/frontend/script.js.tmp\")",
+      "Bash(findstr:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

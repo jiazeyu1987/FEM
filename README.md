@@ -23,7 +23,7 @@ Windows 需要本地有可用的 OpenCV 视频解码能力（opencv-python-headl
 ```bash
 python backend/main.py
 # 或
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.main:app --host 0.0.0.0 --port 8421 --reload
 ```
 
 接口：
@@ -54,7 +54,7 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 3. 设置采样帧率与勾选检测方案
 4. 点击「分析」，等待结果与曲线
 
-默认后端地址为 `http://localhost:8000`，若有变更，请在 `frontend/script.js` 中调整。
+默认后端地址为 `http://localhost:8421`，若有变更，请在 `frontend/script.js` 中调整。
 
 ## 检测说明（简化实现）
 - 突增（sudden）：平滑后序列一阶差分大于自适应门限（基于 MAD）且超过最小跃迁
