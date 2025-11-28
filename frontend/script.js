@@ -31,6 +31,13 @@
     fall_thresh: document.getElementById('p_fall_thresh'),
   };
 
+  // ROI mode UI elements
+  const roiModeRadios = document.querySelectorAll('input[name="roiMode"]');
+  const roiParamsDiv = document.getElementById('roiParams');
+  const roiWidthInput = document.getElementById('roiWidth');
+  const roiHeightInput = document.getElementById('roiHeight');
+  const hintEl = document.querySelector('.hint');
+
   let roi = null; // normalized {x,y,w,h}
   let dragging = false; let start = null; let rectPx = null;
   let analyzedXs = []; let analyzedEvents = []; let analyzedSeries = []; let analyzedBaseline = 0;
@@ -41,6 +48,12 @@
   let panX = 0, panY = 0; // videoWrap translation in panel pixels
   let isPanning = false; let panStart = {x:0,y:0}; let panOrigin = {x:0,y:0};
   let roiVisible = true;
+
+  // ROI mode variables
+  let roiMode = 'drag'; // 'drag' or 'center'
+  let roiCenter = null; // center point coordinates {x, y}
+  let roiDimensions = {w: 100, h: 100}; // pixel dimensions
+  let placingCenter = false;
   const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), yZoom: 1, padLeft: 56 };
 
   // Load video preview
@@ -84,12 +97,41 @@
   function drawOverlay(){
     const ctx = overlay.getContext('2d');
     ctx.clearRect(0,0,overlay.width, overlay.height);
+
     if (rectPx && roiVisible){
-      ctx.strokeStyle = '#4fc3f7';
+      // Use different colors for different modes
+      if (roiMode === 'center') {
+        ctx.strokeStyle = '#f59e0b'; // Yellow/orange for center-point mode
+        ctx.fillStyle = 'rgba(245,158,11,0.15)';
+      } else {
+        ctx.strokeStyle = '#4fc3f7'; // Blue for drag mode
+        ctx.fillStyle = 'rgba(79,195,247,0.15)';
+      }
+
       ctx.lineWidth = 2;
       ctx.strokeRect(rectPx.x, rectPx.y, rectPx.w, rectPx.h);
-      ctx.fillStyle = 'rgba(79,195,247,0.15)';
       ctx.fillRect(rectPx.x, rectPx.y, rectPx.w, rectPx.h);
+
+      // Show center point in center-point mode
+      if (roiMode === 'center' && roiCenter) {
+        ctx.strokeStyle = '#ef4444'; // Red for center marker
+        ctx.fillStyle = '#ef4444';
+        ctx.lineWidth = 1;
+
+        // Draw crosshair at center point
+        const crossSize = 8;
+        ctx.beginPath();
+        ctx.moveTo(roiCenter.x - crossSize, roiCenter.y);
+        ctx.lineTo(roiCenter.x + crossSize, roiCenter.y);
+        ctx.moveTo(roiCenter.x, roiCenter.y - crossSize);
+        ctx.lineTo(roiCenter.x, roiCenter.y + crossSize);
+        ctx.stroke();
+
+        // Draw center dot
+        ctx.beginPath();
+        ctx.arc(roiCenter.x, roiCenter.y, 3, 0, 2 * Math.PI);
+        ctx.fill();
+      }
     }
   }
 
@@ -98,6 +140,76 @@
   function localPos(e){
     const rect = overlay.getBoundingClientRect();
     return { x: (e.clientX - rect.left) / Math.max(zoom,1e-6), y: (e.clientY - rect.top) / Math.max(zoom,1e-6) };
+  }
+
+  // ROI mode switching logic
+  function updateHintText() {
+    if (roiMode === 'drag') {
+      hintEl.textContent = 'Select ROI: left-drag; middle button pan; right toggles';
+    } else {
+      hintEl.textContent = '中心点模式: 左键点击设置中心点; 中键平移; 右键切换显示';
+    }
+  }
+
+  function switchRoiMode(newMode) {
+    roiMode = newMode;
+    roiParamsDiv.style.display = newMode === 'center' ? 'grid' : 'none';
+    updateHintText();
+    // Clear existing ROI when switching modes
+    roi = null;
+    roiCenter = null;
+    rectPx = null;
+    drawOverlay();
+  }
+
+  // Add event listeners for ROI mode switching
+  roiModeRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (radio.checked) {
+        switchRoiMode(radio.value);
+      }
+    });
+  });
+
+  // Add event listeners for dimension inputs
+  roiWidthInput?.addEventListener('input', () => {
+    roiDimensions.w = parseInt(roiWidthInput.value) || 100;
+    if (roiMode === 'center' && roiCenter) {
+      updateRoiFromCenter();
+    }
+  });
+
+  roiHeightInput?.addEventListener('input', () => {
+    roiDimensions.h = parseInt(roiHeightInput.value) || 100;
+    if (roiMode === 'center' && roiCenter) {
+      updateRoiFromCenter();
+    }
+  });
+
+  function centerToNormalized(center, dims, videoW, videoH) {
+    return {
+      x: (center.x - dims.w/2) / videoW,
+      y: (center.y - dims.h/2) / videoH,
+      w: dims.w / videoW,
+      h: dims.h / videoH
+    };
+  }
+
+  function updateRoiFromCenter() {
+    if (!roiCenter) return;
+    roi = centerToNormalized(roiCenter, roiDimensions, overlay.width, overlay.height);
+    // Update rectPx for drawing
+    rectPx = {
+      x: roiCenter.x - roiDimensions.w/2,
+      y: roiCenter.y - roiDimensions.h/2,
+      w: roiDimensions.w,
+      h: roiDimensions.h
+    };
+    drawOverlay();
+    if (roi) {
+      analyzeBtn.disabled = false;
+      updateRoiStatus();
+    }
   }
   overlay.addEventListener('mousedown', (e)=>{
     if (e.button === 1){ // middle button: pan
@@ -113,9 +225,17 @@
     }
     if (e.button !== 0) return; // only left button draws ROI
     const p = localPos(e);
-    start = {x: p.x, y: p.y};
-    dragging = true; rectPx = {x:start.x, y:start.y, w:0, h:0};
-    drawOverlay();
+
+    if (roiMode === 'center') {
+      // Center-point mode: set center and create ROI immediately
+      roiCenter = {x: p.x, y: p.y};
+      updateRoiFromCenter();
+    } else {
+      // Drag mode: start dragging
+      start = {x: p.x, y: p.y};
+      dragging = true; rectPx = {x:start.x, y:start.y, w:0, h:0};
+      drawOverlay();
+    }
   });
   overlay.addEventListener('mousemove', (e)=>{
     if(!dragging) return;
@@ -141,6 +261,12 @@
       analyzeBtn.disabled = !fileInput.files?.[0];
       statusEl.textContent = `ROI = x:${roi.x.toFixed(3)}, y:${roi.y.toFixed(3)}, w:${roi.w.toFixed(3)}, h:${roi.h.toFixed(3)}`;
     }
+  }
+
+  // Update status text for center-point mode ROI
+  function updateRoiStatus() {
+    if (!roi) return;
+    statusEl.textContent = `ROI = x:${roi.x.toFixed(3)}, y:${roi.y.toFixed(3)}, w:${roi.w.toFixed(3)}, h:${roi.h.toFixed(3)}`;
   }
   overlay.addEventListener('mouseup', finishDrag);
   overlay.addEventListener('mouseleave', finishDrag);

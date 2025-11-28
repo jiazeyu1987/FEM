@@ -80,6 +80,14 @@
       <div class="panel video-panel">
         <div class="panel-header">Video & ROI</div>
         <div class="panel-body video-box">
+          <div class="roi-mode-selector">
+            <label><input type="radio" name="roiMode" value="drag" checked> 拖拽模式</label>
+            <label><input type="radio" name="roiMode" value="center"> 中心点模式</label>
+          </div>
+          <div class="roi-params" id="roiParams" style="display:none">
+            <label>宽度: <input type="number" id="roiWidth" min="10" max="500" value="100"></label>
+            <label>高度: <input type="number" id="roiHeight" min="10" max="500" value="100"></label>
+          </div>
           <div id="videoWrap" class="video-wrap">
             <video id="video" controls></video>
             <canvas id="overlay"></canvas>
@@ -128,7 +136,7 @@
 </main>
       </div>
     </div>
-    <script src="script.js?v=hem5"></script>
+    <script src="script.js?v=hem6-roi-mode"></script>
   </body>
   </html>
 

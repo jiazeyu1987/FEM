@@ -1,5 +1,5 @@
 const fs = require('fs');
-const content = fs.readFileSync('D:/ProjectPackage/Puray/HEM/frontend/script.js', 'utf8');
+const content = fs.readFileSync('D:/ProjectPackage/FEM/frontend/script.js', 'utf8');
 const lines = content.split('\n');
 
 // Print lines around the problematic area
