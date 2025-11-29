@@ -111,3 +111,19 @@ tbody tr:hover{background:#0b1220}
 .video-selector{background:var(--panel);border:1px solid var(--border);border-radius:6px}
 .video-select{width:100%;padding:8px 10px;background:#1f1f1f;border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px;cursor:pointer}
 .video-select:disabled{opacity:0.5;cursor:not-allowed}
+/* Interval Panel Styles */
+.interval-panel{background:var(--panel);border:1px solid var(--border);border-radius:6px}
+.interval-content{padding:12px}
+.find-interval-btn{width:100%;padding:8px 12px;background:#059669;color:white;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;transition:background-color 0.2s;margin-bottom:12px}
+.find-interval-btn:hover{background:#047857}
+.find-interval-btn:disabled{opacity:0.5;cursor:not-allowed}
+.interval-info{background:#1f2937;border-radius:4px;padding:12px;margin-bottom:8px}
+.interval-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:4px 0}
+.interval-label{color:#9ca3af;font-weight:500}
+.interval-number{color:#10b981;font-family:monospace;font-weight:600;min-width:60px;text-align:right}
+.jump-btn{width:100%;padding:6px 8px;background:#3b82f6;color:white;border:none;border-radius:4px;font-size:11px;font-weight:500;cursor:pointer;transition:background-color 0.2s;margin-top:8px}
+.jump-btn:hover{background:#2563eb}
+.jump-btn-end{background:#f97316;margin-top:4px}
+.jump-btn-end:hover{background:#ea580c}
+.no-interval{background:#1f2937;border-radius:4px;padding:12px;text-align:center}
+.interval-status{color:#6b7280;font-size:11px;font-style:italic}

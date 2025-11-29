@@ -29,6 +29,16 @@
   const infoStatusEl = document.getElementById('infoStatus');
   const clearInfoBtn = document.getElementById('clearInfoBtn');
 
+  // Next interval panel elements
+  const findNextIntervalBtn = document.getElementById('findNextIntervalBtn');
+  const nextIntervalInfo = document.getElementById('nextIntervalInfo');
+  const intervalStartFrameEl = document.getElementById('intervalStartFrame');
+  const intervalEndFrameEl = document.getElementById('intervalEndFrame');
+  const intervalTotalFramesEl = document.getElementById('intervalTotalFrames');
+  const jumpToIntervalBtn = document.getElementById('jumpToIntervalBtn');
+  const jumpToIntervalEndBtn = document.getElementById('jumpToIntervalEndBtn');
+  const noIntervalInfo = document.getElementById('noIntervalInfo');
+
   // Batch analysis elements
   const batchFileInput = document.getElementById('batchFileInput');
   const batchLoadBtn = document.getElementById('batchLoadBtn');
@@ -541,6 +551,85 @@ function getThresholds(){
   const fall = Number((fallInput && fallInput.value) || -3);
   return { rise, fall };
 }
+
+// Next interval functions
+function findNextShadedInterval(currentTime) {
+  if (!shadedIntervals || shadedIntervals.length === 0) {
+    return null;
+  }
+
+  // Find the first interval that starts after currentTime
+  for (let i = 0; i < shadedIntervals.length; i++) {
+    const interval = shadedIntervals[i];
+    if (interval.start > currentTime) {
+      return interval;
+    }
+  }
+
+  return null; // No interval found after currentTime
+}
+
+function calculateIntervalFrames(interval, sampleFps) {
+  if (!interval || !sampleFps || sampleFps <= 0) {
+    return { startFrame: 0, endFrame: 0, totalFrames: 0 };
+  }
+
+  const startFrame = Math.floor(interval.start * sampleFps);
+  const endFrame = Math.floor(interval.end * sampleFps);
+  const totalFrames = endFrame - startFrame + 1;
+
+  return { startFrame, endFrame, totalFrames };
+}
+
+function updateNextIntervalInfo(currentTime) {
+  const nextInterval = findNextShadedInterval(currentTime);
+  const sampleFps = Number(sampleFpsEl?.value || 8);
+
+  if (nextInterval) {
+    const frames = calculateIntervalFrames(nextInterval, sampleFps);
+
+    // Update interval info display
+    intervalStartFrameEl.textContent = frames.startFrame;
+    intervalEndFrameEl.textContent = frames.endFrame;
+    intervalTotalFramesEl.textContent = frames.totalFrames;
+
+    // Show interval info, hide no interval message
+    nextIntervalInfo.style.display = 'block';
+    noIntervalInfo.style.display = 'none';
+
+    // Store current interval for jump functionality
+    window.currentNextInterval = nextInterval;
+  } else {
+    // Hide interval info, show no interval message
+    nextIntervalInfo.style.display = 'none';
+    noIntervalInfo.style.display = 'block';
+
+    // Clear stored interval
+    window.currentNextInterval = null;
+  }
+}
+
+function jumpToInterval(interval) {
+  if (!interval || !video) {
+    return;
+  }
+
+  // Jump to the start of the interval
+  video.currentTime = interval.start;
+  renderTimeline();
+  rerenderAll();
+}
+
+function jumpToIntervalEnd(interval) {
+  if (!interval || !video) {
+    return;
+  }
+
+  // Jump to the end of the interval
+  video.currentTime = interval.end;
+  renderTimeline();
+  rerenderAll();
+}
   function recomputeShadedIntervals(){
     if (!analyzedSeries || !analyzedSeries.length || !analyzedXs || !analyzedXs.length){ shadedIntervals = []; return; }
     const xs = analyzedXs;
@@ -733,6 +822,9 @@ function getThresholds(){
       // Update information panel with curve values
       const values = interpolateCurveValues(t);
       updateInfoPanel(t, values);
+
+      // Update next interval info
+      updateNextIntervalInfo(t);
     }
   });
   timeline.addEventListener('wheel', (e)=>{
@@ -1175,6 +1267,40 @@ function getThresholds(){
   // Clear information panel button
   if (clearInfoBtn) {
     clearInfoBtn.addEventListener('click', clearInfoPanel);
+  }
+
+  // Next interval panel event listeners
+  if (findNextIntervalBtn) {
+    findNextIntervalBtn.addEventListener('click', () => {
+      const currentTime = video.currentTime || 0;
+      updateNextIntervalInfo(currentTime);
+    });
+  }
+
+  if (jumpToIntervalBtn) {
+    jumpToIntervalBtn.addEventListener('click', () => {
+      if (window.currentNextInterval) {
+        jumpToInterval(window.currentNextInterval);
+      }
+    });
+  }
+
+  if (jumpToIntervalEndBtn) {
+    jumpToIntervalEndBtn.addEventListener('click', () => {
+      if (window.currentNextInterval) {
+        jumpToIntervalEnd(window.currentNextInterval);
+      }
+    });
+  }
+
+  // Update interval info when video time changes
+  if (video) {
+    video.addEventListener('timeupdate', () => {
+      if (nextIntervalInfo && nextIntervalInfo.style.display === 'block') {
+        const currentTime = video.currentTime || 0;
+        updateNextIntervalInfo(currentTime);
+      }
+    });
   }
 
 

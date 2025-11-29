@@ -126,6 +126,31 @@
               <button id="clearInfoBtn" class="clear-btn">清除信息</button>
             </div>
           </div>
+          <div class="section interval-panel">
+            <label class="label">下一个着色区间</label>
+            <div class="interval-content">
+              <button id="findNextIntervalBtn" class="find-interval-btn">查找下一个区间</button>
+              <div id="nextIntervalInfo" class="interval-info" style="display:none">
+                <div class="interval-row">
+                  <span class="interval-label">起始帧:</span>
+                  <span id="intervalStartFrame" class="interval-number">--</span>
+                </div>
+                <div class="interval-row">
+                  <span class="interval-label">结束帧:</span>
+                  <span id="intervalEndFrame" class="interval-number">--</span>
+                </div>
+                <div class="interval-row">
+                  <span class="interval-label">总帧数:</span>
+                  <span id="intervalTotalFrames" class="interval-number">--</span>
+                </div>
+                <button id="jumpToIntervalBtn" class="jump-btn">跳转到区间</button>
+                <button id="jumpToIntervalEndBtn" class="jump-btn jump-btn-end">跳转到结束</button>
+              </div>
+              <div id="noIntervalInfo" class="no-interval" style="display:none">
+                <span class="interval-status">暂无下一个着色区间</span>
+              </div>
+            </div>
+          </div>
           <div class="section small" id="status"></div>
         </aside>
 
