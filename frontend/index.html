@@ -31,47 +31,25 @@
             <label class="label">采样帧率 (fps)</label>
             <input type="number" id="sampleFps" min="1" max="30" step="1" value="8" />
           </div>
-          <div class="section">
-            <label class="label">检测方案</label>
-            <div class="checkboxes">
-              <label><input type="checkbox" class="method" value="sudden" checked />突增</label>
-              <label><input type="checkbox" class="method" value="threshold" checked />阈值</label>
-              <label><input type="checkbox" class="method" value="relative" checked />相对</label>
-            </div>
-          </div>
-          <div class="section">
-            <label class="label">HEM 判定标准与参数</label>
-            <div class="criteria">
-              <details open>
-                <summary>规则说明</summary>
-                <ul>
-                  <li>突增：ROI灰度一阶差分高于自适应门限（基于MAD）且超过最小Δ</li>
-                  <li>阈值：ROI灰度高于“基线+偏移”并持续≥最小帧数</li>
-                  <li>相对：ROI灰度与同帧参考均值的差值超过阈值</li>
-                </ul>
-              </details>
-              <div class="grid">
-                <label>平滑窗口 k<input id="p_smooth_k" type="number" min="1" max="21" step="1" value="3"></label>
-                <label>基线样本 n<input id="p_baseline_n" type="number" min="3" max="200" step="1" value="10"></label>
-                <label>突增倍数 k<input id="p_sudden_k" type="number" min="0" step="0.5" value="6"></label>
-                <label>突增最小Δ<input id="p_sudden_min" type="number" min="0" step="0.5" value="4"></label>
-                <label>阈值偏移 Δ<input id="p_threshold_delta" type="number" min="0" step="0.5" value="8"></label>
-                <label>阈值最小帧<input id="p_threshold_hold" type="number" min="1" max="30" step="1" value="1"></label>
-                <label>相对差阈值<input id="p_relative_delta" type="number" min="0" step="0.5" value="6"></label>
-                <label>高灰度阈值<input id="p_high_threshold" type="number" min="0" max="255" step="1" value="130"></label>
-              </div>
-            </div>
-          </div>
+          <!-- Hidden default detection methods (all enabled by default) -->
+<input type="checkbox" class="method" value="sudden" checked style="display:none" />
+<input type="checkbox" class="method" value="threshold" checked style="display:none" />
+<input type="checkbox" class="method" value="relative" checked style="display:none" />
+          <!-- Hidden default parameters (keep functionality, remove UI) -->
+<input type="number" id="p_smooth_k" min="1" max="21" step="1" value="3" style="display:none" />
+<input type="number" id="p_baseline_n" min="3" max="200" step="1" value="10" style="display:none" />
+<input type="number" id="p_sudden_k" min="0" step="0.5" value="6" style="display:none" />
+<input type="number" id="p_sudden_min" min="0" step="0.5" value="4" style="display:none" />
+<input type="number" id="p_threshold_delta" min="0" step="0.5" value="8" style="display:none" />
+<input type="number" id="p_threshold_hold" min="1" max="30" step="1" value="1" style="display:none" />
+<input type="number" id="p_relative_delta" min="0" step="0.5" value="6" style="display:none" />
+<input type="number" id="p_high_threshold" min="0" max="255" step="1" value="130" style="display:none" />
           <div class="section">
             <button id="analyzeBtn" disabled>分析</button>
           </div>
-          <div class="section">
-            <label class="label"><span id="shade_title">Timeline Shading</span></label>
-            <div class="grid">
-              <label><span id="rise_label">Rise Threshold (+)</span><input id="p_rise_thresh" type="number" step="0.1" value="15.5"></label>
-              <label><span id="fall_label">Fall Threshold (-)</span><input id="p_fall_thresh" type="number" step="0.1" value="-3"></label>
-            </div>
-          </div>
+          <!-- Hidden timeline shading parameters (keep functionality, remove UI) -->
+<input type="number" id="p_rise_thresh" step="0.1" value="15.5" style="display:none" />
+<input type="number" id="p_fall_thresh" step="0.1" value="-3" style="display:none" />
           <div class="section batch-section">
             <label class="label">批量分析</label>
             <div class="batch-controls">
