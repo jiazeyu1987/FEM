@@ -46,11 +46,13 @@ def compute_series(
     roi: Dict[str, float],
     sample_fps: float,
     ref_mode: str = "global",
+    high_threshold: int = 130,
 ):
     series_t: List[float] = []
     roi_mean: List[float] = []
     ref_mean: List[float] = []
     roi_std: List[float] = []
+    roi_high_ratio: List[float] = []
 
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -72,6 +74,11 @@ def compute_series(
         roi_patch = gray[y0:y1, x0:x1]
         roi_val = float(np.mean(roi_patch)) if roi_patch.size else float("nan")
         roi_std_val = float(np.std(roi_patch)) if roi_patch.size else float("nan")
+        # Calculate high gray value ratio (percentage of pixels > threshold)
+        if roi_patch.size > 0:
+            roi_high_ratio_val = float(np.sum(roi_patch > high_threshold) / roi_patch.size * 100)
+        else:
+            roi_high_ratio_val = float("nan")
 
         if ref_mode == "global":
             ref_val = float(np.mean(gray))
@@ -83,8 +90,9 @@ def compute_series(
         roi_mean.append(roi_val)
         ref_mean.append(ref_val)
         roi_std.append(roi_std_val)
+        roi_high_ratio.append(roi_high_ratio_val)
 
-    return series_t, roi_mean, ref_mean, roi_std
+    return series_t, roi_mean, ref_mean, roi_std, roi_high_ratio
 
 
 def moving_average(x: np.ndarray, k: int = 3) -> np.ndarray:
@@ -175,6 +183,7 @@ async def analyze(
     threshold_delta: Optional[float] = Form(None),
     threshold_hold: Optional[int] = Form(None),
     relative_delta: Optional[float] = Form(None),
+    high_threshold: Optional[int] = Form(130),
 ):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -192,7 +201,7 @@ async def analyze(
             return JSONResponse(status_code=400, content={"error": "Cannot open video"})
 
         roi = {"x": roi_x, "y": roi_y, "w": roi_w, "h": roi_h}
-        t, roi_m, ref_m, roi_s = compute_series(cap, roi, sample_fps, ref_mode="global")
+        t, roi_m, ref_m, roi_s, roi_h = compute_series(cap, roi, sample_fps, ref_mode="global", high_threshold=high_threshold or 130)
         cap.release()
 
         params: Dict[str, Any] = {}
@@ -213,7 +222,7 @@ async def analyze(
         )
 
         # Prepare compact series for plotting
-        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf), "std": float(rs)} for tt, rm, rf, rs in zip(t, roi_m, ref_m, roi_s)]
+        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf), "std": float(rs), "high": float(rh)} for tt, rm, rf, rs, rh in zip(t, roi_m, ref_m, roi_s, roi_h)]
 
         return {
             "has_hem": has_hem,

@@ -221,9 +221,19 @@
                 series.push({
                     t: t,
                     roi: roiValue,
-                    ref: 128 + Math.random() * 5 - 2.5
+                    ref: 128 + Math.random() * 5 - 2.5,
+                    std: 10 + Math.random() * 5,  // 添加模拟的标准差数据
+                    high: 20 + Math.sin(t * 0.3) * 15 + Math.random() * 10  // 添加模拟的高灰度像素占比数据
                 });
             }
+
+            // 验证生成的数据包含所有必要字段
+            if (series.length > 0 && (!series[0].hasOwnProperty('std') || !series[0].hasOwnProperty('high'))) {
+                console.error('Generated mock data missing required fields');
+                console.log('Available fields:', Object.keys(series[0]));
+                throw new Error('Mock data generation failed: missing std or high field');
+            }
+            console.log('Mock data generated successfully, samples - std:', series[0].std.toFixed(2), 'high:', series[0].high.toFixed(1));
 
             return {
                 id: file.name + '_' + file.size,

@@ -58,6 +58,7 @@
                 <label>阈值偏移 Δ<input id="p_threshold_delta" type="number" min="0" step="0.5" value="8"></label>
                 <label>阈值最小帧<input id="p_threshold_hold" type="number" min="1" max="30" step="1" value="1"></label>
                 <label>相对差阈值<input id="p_relative_delta" type="number" min="0" step="0.5" value="6"></label>
+                <label>高灰度阈值<input id="p_high_threshold" type="number" min="0" max="255" step="1" value="130"></label>
               </div>
             </div>
           </div>
@@ -136,6 +137,10 @@
                   <span class="curve-label pink">粉:</span>
                   <span id="infoPinkValue" class="curve-number">--</span>
                 </div>
+                <div class="curve-value">
+                  <span class="curve-label purple">紫:</span>
+                  <span id="infoPurpleValue" class="curve-number">--</span>
+                </div>
               </div>
               <div class="info-status">
                 <span id="infoStatus" class="status-text">点击时间轴查看曲线值</span>
@@ -178,6 +183,7 @@
             <label><input type="checkbox" id="showYellow" checked> Yellow d(Delta v)</label>
             <label><input type="checkbox" id="showWhiteRoi" checked> White ROI Avg</label>
             <label><input type="checkbox" id="showPinkStd" checked> Pink ROI Std</label>
+            <label><input type="checkbox" id="showPurpleHigh" checked> Purple High Ratio</label>
           </div>
           <div class="judge">
             <label style="display:flex;flex-direction:column;font-size:12px;color:#cbd5e1">
