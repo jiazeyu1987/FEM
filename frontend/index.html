@@ -143,8 +143,14 @@
                   <span class="interval-label">总帧数:</span>
                   <span id="intervalTotalFrames" class="interval-number">--</span>
                 </div>
-                <button id="jumpToIntervalBtn" class="jump-btn">跳转到区间</button>
-                <button id="jumpToIntervalEndBtn" class="jump-btn jump-btn-end">跳转到结束</button>
+                <div class="frame-nav-container">
+                  <button id="jumpToIntervalBtn" class="jump-btn">跳转到区间</button>
+                  <button id="prevFrameBtn" class="frame-nav-btn prev-frame-btn">◀ 前一帧</button>
+                </div>
+                <div class="frame-nav-container">
+                  <button id="nextFrameBtn" class="frame-nav-btn next-frame-btn">后一帧 ▶</button>
+                  <button id="jumpToIntervalEndBtn" class="jump-btn jump-btn-end">跳转到结束</button>
+                </div>
               </div>
               <div id="noIntervalInfo" class="no-interval" style="display:none">
                 <span class="interval-status">暂无下一个着色区间</span>

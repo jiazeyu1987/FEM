@@ -37,6 +37,8 @@
   const intervalTotalFramesEl = document.getElementById('intervalTotalFrames');
   const jumpToIntervalBtn = document.getElementById('jumpToIntervalBtn');
   const jumpToIntervalEndBtn = document.getElementById('jumpToIntervalEndBtn');
+  const prevFrameBtn = document.getElementById('prevFrameBtn');
+  const nextFrameBtn = document.getElementById('nextFrameBtn');
   const noIntervalInfo = document.getElementById('noIntervalInfo');
 
   // Batch analysis elements
@@ -95,6 +97,9 @@
   let roiDimensions = {w: 100, h: 200}; // pixel dimensions
   let placingCenter = false;
   const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), showPinkStd: (showPinkStdEl? showPinkStdEl.checked : true), showPurpleHigh: (showPurpleHighEl? showPurpleHighEl.checked : true), yZoom: 1, padLeft: 56 };
+
+  // Initialize frame navigation buttons to always enabled state
+  updateFrameNavigationButtons();
 
   // Batch analysis variables
   const batchAnalyses = new Map(); // videoId -> analysisData
@@ -593,21 +598,23 @@ function updateNextIntervalInfo(currentTime) {
     intervalEndFrameEl.textContent = frames.endFrame;
     intervalTotalFramesEl.textContent = frames.totalFrames;
 
-    // Show interval info, hide no interval message
-    nextIntervalInfo.style.display = 'block';
-    noIntervalInfo.style.display = 'none';
-
     // Store current interval for jump functionality
     window.currentNextInterval = nextInterval;
   } else {
-    // Hide interval info, show no interval message
-    nextIntervalInfo.style.display = 'none';
-    noIntervalInfo.style.display = 'block';
+    // Keep interval info visible, show default values
+    intervalStartFrameEl.textContent = '--';
+    intervalEndFrameEl.textContent = '--';
+    intervalTotalFramesEl.textContent = '--';
+
+    // Hide no interval message, keep interval info visible
+    nextIntervalInfo.style.display = 'block';
+    noIntervalInfo.style.display = 'none';
 
     // Clear stored interval
     window.currentNextInterval = null;
   }
-}
+
+  }
 
 function jumpToInterval(interval) {
   if (!interval || !video) {
@@ -629,6 +636,42 @@ function jumpToIntervalEnd(interval) {
   video.currentTime = interval.end;
   renderTimeline();
   rerenderAll();
+}
+
+function navigateToPreviousFrame(interval) {
+  const sampleFps = Number(sampleFpsEl?.value || 8);
+  const frameStep = 1 / sampleFps; // Time duration of one frame
+  const currentTime = video.currentTime || 0;
+
+  // Calculate new time, allow navigation without interval boundary restrictions
+  const newTime = currentTime - frameStep;
+
+  if (video) {
+    video.currentTime = Math.max(0, newTime); // Only prevent going below 0
+    renderTimeline();
+    rerenderAll();
+  }
+}
+
+function navigateToNextFrame(interval) {
+  const sampleFps = Number(sampleFpsEl?.value || 8);
+  const frameStep = 1 / sampleFps; // Time duration of one frame
+  const currentTime = video.currentTime || 0;
+
+  // Calculate new time, allow navigation without interval boundary restrictions
+  const newTime = currentTime + frameStep;
+
+  if (video) {
+    video.currentTime = newTime; // Allow navigation beyond video duration, browser will handle it
+    renderTimeline();
+    rerenderAll();
+  }
+}
+
+function updateFrameNavigationButtons() {
+  // Always enable frame navigation buttons regardless of conditions
+  if (prevFrameBtn) prevFrameBtn.disabled = false;
+  if (nextFrameBtn) nextFrameBtn.disabled = false;
 }
   function recomputeShadedIntervals(){
     if (!analyzedSeries || !analyzedSeries.length || !analyzedXs || !analyzedXs.length){ shadedIntervals = []; return; }
@@ -1293,13 +1336,23 @@ function jumpToIntervalEnd(interval) {
     });
   }
 
+  if (prevFrameBtn) {
+    prevFrameBtn.addEventListener('click', () => {
+      navigateToPreviousFrame(window.currentNextInterval);
+    });
+  }
+
+  if (nextFrameBtn) {
+    nextFrameBtn.addEventListener('click', () => {
+      navigateToNextFrame(window.currentNextInterval);
+    });
+  }
+
   // Update interval info when video time changes
   if (video) {
     video.addEventListener('timeupdate', () => {
-      if (nextIntervalInfo && nextIntervalInfo.style.display === 'block') {
-        const currentTime = video.currentTime || 0;
-        updateNextIntervalInfo(currentTime);
-      }
+      const currentTime = video.currentTime || 0;
+      updateNextIntervalInfo(currentTime);
     });
   }
 
