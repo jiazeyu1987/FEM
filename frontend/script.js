@@ -41,6 +41,24 @@
   const nextFrameBtn = document.getElementById('nextFrameBtn');
   const noIntervalInfo = document.getElementById('noIntervalInfo');
 
+  // Interval statistics elements
+  const intervalStatistics = document.getElementById('intervalStatistics');
+  const blueStatMin = document.getElementById('blueStatMin');
+  const blueStatMax = document.getElementById('blueStatMax');
+  const blueStatAvg = document.getElementById('blueStatAvg');
+  const yellowStatMin = document.getElementById('yellowStatMin');
+  const yellowStatMax = document.getElementById('yellowStatMax');
+  const yellowStatAvg = document.getElementById('yellowStatAvg');
+  const whiteStatMin = document.getElementById('whiteStatMin');
+  const whiteStatMax = document.getElementById('whiteStatMax');
+  const whiteStatAvg = document.getElementById('whiteStatAvg');
+  const pinkStatMin = document.getElementById('pinkStatMin');
+  const pinkStatMax = document.getElementById('pinkStatMax');
+  const pinkStatAvg = document.getElementById('pinkStatAvg');
+  const purpleStatMin = document.getElementById('purpleStatMin');
+  const purpleStatMax = document.getElementById('purpleStatMax');
+  const purpleStatAvg = document.getElementById('purpleStatAvg');
+
   // Batch analysis elements
   const batchFileInput = document.getElementById('batchFileInput');
   const batchLoadBtn = document.getElementById('batchLoadBtn');
@@ -586,17 +604,115 @@ function calculateIntervalFrames(interval, sampleFps) {
   return { startFrame, endFrame, totalFrames };
 }
 
+function calculateIntervalStatistics(interval) {
+  if (!interval || !analyzedXs || !analyzedXs.length || !analyzedSeries || !analyzedSeries.length) {
+    return null;
+  }
+
+  // Find indices for the interval time range
+  const startIndex = analyzedXs.findIndex(t => t >= interval.start);
+  let endIndex = analyzedXs.findIndex(t => t > interval.end);
+  if (endIndex === -1) endIndex = analyzedXs.length;
+  endIndex -= 1; // Include the last point within interval
+
+  if (startIndex === -1 || endIndex < startIndex || endIndex >= analyzedSeries.length) {
+    return null;
+  }
+
+  // Extract curve data within the interval
+  const intervalData = {
+    white: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.roi),
+    pink: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.std || 0),
+    purple: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.high || 0)
+  };
+
+  // Calculate blue curve (d1) values
+  const roiValues = analyzedSeries.map(p => p.roi);
+  const blueValues = [];
+  for (let i = 0; i < roiValues.length; i++) {
+    if (i === 0) {
+      blueValues.push(0);
+    } else {
+      const base = analyzedBaseline || 0;
+      blueValues.push(roiValues[i] - base);
+    }
+  }
+  intervalData.blue = blueValues.slice(startIndex, endIndex + 1);
+
+  // Calculate yellow curve (d2) - first derivative of blue
+  intervalData.yellow = [];
+  for (let i = 0; i < intervalData.blue.length; i++) {
+    if (i === 0) {
+      intervalData.yellow.push(0);
+    } else {
+      intervalData.yellow.push(intervalData.blue[i] - intervalData.blue[i-1]);
+    }
+  }
+
+  // Calculate statistics for each curve
+  const calculateStats = (data) => {
+    if (!data || data.length === 0) return { min: 0, max: 0, avg: 0 };
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const avg = data.reduce((sum, val) => sum + val, 0) / data.length;
+    return { min, max, avg };
+  };
+
+  return {
+    blue: calculateStats(intervalData.blue),
+    yellow: calculateStats(intervalData.yellow),
+    white: calculateStats(intervalData.white),
+    pink: calculateStats(intervalData.pink),
+    purple: calculateStats(intervalData.purple)
+  };
+}
+
 function updateNextIntervalInfo(currentTime) {
   const nextInterval = findNextShadedInterval(currentTime);
   const sampleFps = Number(sampleFpsEl?.value || 8);
 
   if (nextInterval) {
     const frames = calculateIntervalFrames(nextInterval, sampleFps);
+    const statistics = calculateIntervalStatistics(nextInterval);
 
     // Update interval info display
     intervalStartFrameEl.textContent = frames.startFrame;
     intervalEndFrameEl.textContent = frames.endFrame;
     intervalTotalFramesEl.textContent = frames.totalFrames;
+
+    // Update statistics display
+    if (statistics) {
+      // Blue curve statistics
+      blueStatMin.textContent = statistics.blue.min.toFixed(3);
+      blueStatMax.textContent = statistics.blue.max.toFixed(3);
+      blueStatAvg.textContent = statistics.blue.avg.toFixed(3);
+
+      // Yellow curve statistics
+      yellowStatMin.textContent = statistics.yellow.min.toFixed(3);
+      yellowStatMax.textContent = statistics.yellow.max.toFixed(3);
+      yellowStatAvg.textContent = statistics.yellow.avg.toFixed(3);
+
+      // White curve statistics
+      whiteStatMin.textContent = statistics.white.min.toFixed(1);
+      whiteStatMax.textContent = statistics.white.max.toFixed(1);
+      whiteStatAvg.textContent = statistics.white.avg.toFixed(1);
+
+      // Pink curve statistics
+      pinkStatMin.textContent = statistics.pink.min.toFixed(3);
+      pinkStatMax.textContent = statistics.pink.max.toFixed(3);
+      pinkStatAvg.textContent = statistics.pink.avg.toFixed(3);
+
+      // Purple curve statistics
+      purpleStatMin.textContent = statistics.purple.min.toFixed(1);
+      purpleStatMax.textContent = statistics.purple.max.toFixed(1);
+      purpleStatAvg.textContent = statistics.purple.avg.toFixed(1);
+
+      // Show statistics section
+      intervalStatistics.style.display = 'block';
+    } else {
+      // Hide statistics if calculation failed
+      intervalStatistics.style.display = 'none';
+    }
 
     // Store current interval for jump functionality
     window.currentNextInterval = nextInterval;
@@ -605,6 +721,26 @@ function updateNextIntervalInfo(currentTime) {
     intervalStartFrameEl.textContent = '--';
     intervalEndFrameEl.textContent = '--';
     intervalTotalFramesEl.textContent = '--';
+
+    // Clear statistics display
+    blueStatMin.textContent = '--';
+    blueStatMax.textContent = '--';
+    blueStatAvg.textContent = '--';
+    yellowStatMin.textContent = '--';
+    yellowStatMax.textContent = '--';
+    yellowStatAvg.textContent = '--';
+    whiteStatMin.textContent = '--';
+    whiteStatMax.textContent = '--';
+    whiteStatAvg.textContent = '--';
+    pinkStatMin.textContent = '--';
+    pinkStatMax.textContent = '--';
+    pinkStatAvg.textContent = '--';
+    purpleStatMin.textContent = '--';
+    purpleStatMax.textContent = '--';
+    purpleStatAvg.textContent = '--';
+
+    // Hide statistics section
+    intervalStatistics.style.display = 'none';
 
     // Hide no interval message, keep interval info visible
     nextIntervalInfo.style.display = 'block';

@@ -151,6 +151,63 @@
                   <button id="nextFrameBtn" class="frame-nav-btn next-frame-btn">后一帧 ▶</button>
                   <button id="jumpToIntervalEndBtn" class="jump-btn jump-btn-end">跳转到结束</button>
                 </div>
+
+                <!-- 曲线统计信息 -->
+                <div class="interval-statistics" id="intervalStatistics" style="display:none">
+                  <div class="statistics-header">区间曲线统计</div>
+                  <div class="statistics-grid">
+                    <div class="curve-statistics">
+                      <div class="curve-stats-header">
+                        <span class="curve-stat-label blue">蓝曲线</span>
+                      </div>
+                      <div class="curve-stats-values">
+                        <span class="stat-item">最小: <span id="blueStatMin" class="stat-number">--</span></span>
+                        <span class="stat-item">最大: <span id="blueStatMax" class="stat-number">--</span></span>
+                        <span class="stat-item">平均: <span id="blueStatAvg" class="stat-number">--</span></span>
+                      </div>
+                    </div>
+                    <div class="curve-statistics">
+                      <div class="curve-stats-header">
+                        <span class="curve-stat-label yellow">黄曲线</span>
+                      </div>
+                      <div class="curve-stats-values">
+                        <span class="stat-item">最小: <span id="yellowStatMin" class="stat-number">--</span></span>
+                        <span class="stat-item">最大: <span id="yellowStatMax" class="stat-number">--</span></span>
+                        <span class="stat-item">平均: <span id="yellowStatAvg" class="stat-number">--</span></span>
+                      </div>
+                    </div>
+                    <div class="curve-statistics">
+                      <div class="curve-stats-header">
+                        <span class="curve-stat-label white">白曲线</span>
+                      </div>
+                      <div class="curve-stats-values">
+                        <span class="stat-item">最小: <span id="whiteStatMin" class="stat-number">--</span></span>
+                        <span class="stat-item">最大: <span id="whiteStatMax" class="stat-number">--</span></span>
+                        <span class="stat-item">平均: <span id="whiteStatAvg" class="stat-number">--</span></span>
+                      </div>
+                    </div>
+                    <div class="curve-statistics">
+                      <div class="curve-stats-header">
+                        <span class="curve-stat-label pink">粉曲线</span>
+                      </div>
+                      <div class="curve-stats-values">
+                        <span class="stat-item">最小: <span id="pinkStatMin" class="stat-number">--</span></span>
+                        <span class="stat-item">最大: <span id="pinkStatMax" class="stat-number">--</span></span>
+                        <span class="stat-item">平均: <span id="pinkStatAvg" class="stat-number">--</span></span>
+                      </div>
+                    </div>
+                    <div class="curve-statistics">
+                      <div class="curve-stats-header">
+                        <span class="curve-stat-label purple">紫曲线</span>
+                      </div>
+                      <div class="curve-stats-values">
+                        <span class="stat-item">最小: <span id="purpleStatMin" class="stat-number">--</span></span>
+                        <span class="stat-item">最大: <span id="purpleStatMax" class="stat-number">--</span></span>
+                        <span class="stat-item">平均: <span id="purpleStatAvg" class="stat-number">--</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div id="noIntervalInfo" class="no-interval" style="display:none">
                 <span class="interval-status">暂无下一个着色区间</span>
