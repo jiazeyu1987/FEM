@@ -79,6 +79,24 @@
   const deepAnalysisStatus = document.getElementById('deepAnalysisStatus');
   const videoSelector = document.getElementById('videoSelector');
 
+  // Export and batch charts elements
+  const exportCurveDataBtn = document.getElementById('exportCurveDataBtn');
+  const batchChartsBtn = document.getElementById('batchChartsBtn');
+  const curveDataUpload = document.getElementById('curveDataUpload');
+  const curveDataDropZone = document.getElementById('curveDataDropZone');
+  const curveDataFileInput = document.getElementById('curveDataFileInput');
+  const curveDataLoadBtn = document.getElementById('curveDataLoadBtn');
+  const batchChartsContainer = document.getElementById('batchChartsContainer');
+  const chartsGrid = document.getElementById('chartsGrid');
+  const clearBatchChartsBtn = document.getElementById('clearBatchChartsBtn');
+
+  // Batch chart curve toggles
+  const batchShowWhite = document.getElementById('batchShowWhite');
+  const batchShowBlue = document.getElementById('batchShowBlue');
+  const batchShowYellow = document.getElementById('batchShowYellow');
+  const batchShowPink = document.getElementById('batchShowPink');
+  const batchShowPurple = document.getElementById('batchShowPurple');
+
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
   // parameter inputs
@@ -132,6 +150,23 @@
   // Deep analysis variables
   const deepAnalysisResults = new Map(); // videoId -> deepAnalysisData
   let deepAnalysisProcessing = false;    // Whether deep analysis is active
+
+  // Batch charts variables
+  let batchCurveData = []; // Array of video curve data for batch visualization
+  let batchChartInstances = []; // Array of chart canvas elements
+  let batchChartState = {
+    showWhite: true,
+    showBlue: true,
+    showYellow: true,
+    showPink: true,
+    showPurple: true
+  };
+  let batchScrolling = {
+    active: false,
+    visibleStartIndex: 0,
+    visibleEndIndex: 0,
+    renderedCharts: new Set()
+  };
   const batchQueue = {
     videos: [],           // Array of analysisData
     processing: false,    // Whether batch processing is active
@@ -1572,6 +1607,8 @@ function updateFrameNavigationButtons() {
         setTimeout(() => {
           exportDeepAnalysisToCSV();
           showDeepAnalysisProgress(false);
+          // Enable export controls after deep analysis
+          enableExportControls();
         }, 1000);
       }
 
@@ -1697,6 +1734,26 @@ function updateFrameNavigationButtons() {
       shadedIntervals = originalShadedIntervals;
       analyzedBaseline = originalAnalyzedBaseline;
 
+      // Also store complete analysis data in batchAnalyses for export functionality
+      const analysisData = {
+        id: videoId,
+        fileName: file.name,
+        file: file,
+        roi: analysisRoi,
+        results: {
+          has_hem: !!firstInterval,
+          series: analysisResult.series,
+          baseline: analysisResult.baseline || 0,
+          events: analysisResult.events || []
+        },
+        status: 'completed',
+        progress: 100
+      };
+
+      // Add to batch analyses map for export functionality
+      batchAnalyses.set(videoId, analysisData);
+      console.log(`✅ 已将完整分析数据存储到 batchAnalyses: ${videoId}`);
+
       return deepStats;
 
     } catch (error) {
@@ -1788,6 +1845,221 @@ function updateFrameNavigationButtons() {
     alert(`深度分析完成！已导出 ${exportedCount} 个文件的分析结果到CSV文件（包含${results.length - exportedCount}个无区间文件）。`);
   }
 
+  // Export curve data for all analyzed videos
+  function exportCurveDataToFiles() {
+    console.log('🔍 开始导出曲线数据...');
+    console.log('📊 batchAnalyses.size:', batchAnalyses.size);
+    console.log('📈 deepAnalysisResults.size:', deepAnalysisResults.size);
+
+    if (batchAnalyses.size === 0 && deepAnalysisResults.size === 0) {
+      alert('没有可导出的曲线数据');
+      return;
+    }
+
+    try {
+      // Collect curve data from all analyzed videos
+      const curveDataArray = [];
+
+      // Get data from deep analysis results (preferred)
+      deepAnalysisResults.forEach((deepResult, videoId) => {
+        console.log('🔍 检查深度分析结果:', videoId, deepResult);
+        if (deepResult.interval && deepResult.statistics) {
+          // Find corresponding batch analysis for full curve data
+          const batchAnalysis = batchAnalyses.get(deepResult.videoId);
+          console.log('🔍 查找对应的批量分析:', deepResult.videoId, batchAnalysis);
+          if (batchAnalysis && batchAnalysis.results && batchAnalysis.results.series) {
+            console.log('✅ 找到有效的批量分析数据，提取曲线...');
+            const curveData = extractCurveData(batchAnalysis.results.series);
+            console.log('📈 提取的曲线数据长度:', {
+              time: curveData.time.length,
+              white: curveData.white.length,
+              blue: curveData.blue.length,
+              yellow: curveData.yellow.length,
+              pink: curveData.pink.length,
+              purple: curveData.purple.length
+            });
+
+            curveDataArray.push({
+              fileName: deepResult.videoName,
+              videoId: deepResult.videoId,
+              duration: batchAnalysis.results.series[batchAnalysis.results.series.length - 1]?.t || 0,
+              sampleFps: Number(sampleFpsEl?.value || 8),
+              interval: deepResult.interval,
+              statistics: deepResult.statistics,
+              curves: curveData
+            });
+          } else {
+            console.warn('⚠️ 未找到对应的批量分析数据或缺少series数据');
+          }
+        } else {
+          console.log('⏭️ 跳过没有interval或statistics的深度分析结果');
+        }
+      });
+
+      // If no deep analysis data, fall back to batch analysis results
+      if (curveDataArray.length === 0) {
+        console.log('🔄 没有深度分析数据，回退到批量分析结果...');
+        batchAnalyses.forEach((analysis, videoId) => {
+          console.log('🔍 检查批量分析:', videoId, analysis);
+          if (analysis.results && analysis.results.series) {
+            console.log('✅ 找到有效的批量分析数据，提取曲线...');
+            const curveData = extractCurveData(analysis.results.series);
+            console.log('📈 提取的曲线数据长度:', {
+              time: curveData.time.length,
+              white: curveData.white.length,
+              blue: curveData.blue.length,
+              yellow: curveData.yellow.length,
+              pink: curveData.pink.length,
+              purple: curveData.purple.length
+            });
+
+            curveDataArray.push({
+              fileName: analysis.fileName,
+              videoId: analysis.id,
+              duration: analysis.results.series[analysis.results.series.length - 1]?.t || 0,
+              sampleFps: Number(sampleFpsEl?.value || 8),
+              curves: curveData
+            });
+          } else {
+            console.warn('⚠️ 批量分析缺少results或series数据');
+          }
+        });
+      }
+
+      console.log('📊 最终收集到的曲线数据数量:', curveDataArray.length);
+      if (curveDataArray.length === 0) {
+        console.error('❌ 没有找到有效的曲线数据');
+        alert('没有找到有效的曲线数据');
+        return;
+      }
+
+      // Export to JSON format
+      exportCurveDataJSON(curveDataArray);
+
+      // Export to CSV format
+      exportCurveDataCSV(curveDataArray);
+
+    } catch (error) {
+      console.error('导出曲线数据失败:', error);
+      alert('导出曲线数据失败: ' + error.message);
+    }
+  }
+
+  // Extract curve data from analysis series
+  function extractCurveData(series) {
+    console.log('🔍 extractCurveData 输入检查:', {
+      hasSeries: !!series,
+      seriesLength: series ? series.length : 0,
+      firstItem: series && series.length > 0 ? series[0] : null
+    });
+
+    if (!series || series.length === 0) {
+      console.warn('⚠️ 没有有效的series数据');
+      return { time: [], white: [], blue: [], yellow: [], pink: [], purple: [] };
+    }
+
+    const time = series.map(p => p.t);
+    const white = series.map(p => p.roi);
+
+    // Calculate blue curve (d1)
+    const blue = [];
+    for (let i = 0; i < white.length; i++) {
+      if (i === 0) {
+        blue.push(0);
+      } else {
+        const base = analyzedBaseline || 0;
+        blue.push(white[i] - base);
+      }
+    }
+
+    // Calculate yellow curve (d2) - first derivative of blue
+    const yellow = [];
+    for (let i = 0; i < blue.length; i++) {
+      if (i === 0) {
+        yellow.push(0);
+      } else {
+        yellow.push(blue[i] - blue[i-1]);
+      }
+    }
+
+    const pink = series.map(p => p.std || 0);
+    const purple = series.map(p => p.high || 0);
+
+    console.log('✅ extractCurveData 成功提取曲线:', {
+      timeLength: time.length,
+      whiteLength: white.length,
+      blueLength: blue.length,
+      yellowLength: yellow.length,
+      pinkLength: pink.length,
+      purpleLength: purple.length,
+      sampleValues: {
+        time: time.slice(0, 3),
+        white: white.slice(0, 3),
+        blue: blue.slice(0, 3),
+        yellow: yellow.slice(0, 3),
+        pink: pink.slice(0, 3),
+        purple: purple.slice(0, 3)
+      }
+    });
+
+    return { time, white, blue, yellow, pink, purple };
+  }
+
+  // Export curve data to JSON format
+  function exportCurveDataJSON(curveDataArray) {
+    const jsonData = {
+      exportTime: new Date().toISOString(),
+      totalVideos: curveDataArray.length,
+      sampleFps: Number(sampleFpsEl?.value || 8),
+      videos: curveDataArray
+    };
+
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `曲线数据_${new Date().toISOString().slice(0, 10)}.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  // Export curve data to CSV format (flattened)
+  function exportCurveDataCSV(curveDataArray) {
+    let csvContent = '文件名,视频ID,时长(s),采样率,时间点(s),白曲线,蓝曲线,黄曲线,粉曲线,紫曲线\n';
+
+    curveDataArray.forEach(video => {
+      const maxPoints = video.curves.time.length;
+      for (let i = 0; i < maxPoints; i++) {
+        csvContent += [
+          video.fileName,
+          video.videoId,
+          video.duration.toFixed(3),
+          video.sampleFps,
+          video.curves.time[i].toFixed(3),
+          video.curves.white[i].toFixed(1),
+          video.curves.blue[i].toFixed(3),
+          video.curves.yellow[i].toFixed(3),
+          video.curves.pink[i].toFixed(3),
+          video.curves.purple[i].toFixed(1)
+        ].join(',') + '\n';
+      }
+    });
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `曲线数据_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   function showDeepAnalysisProgress(show, percentage = 0, status = '准备就绪') {
     if (!deepAnalysisProgress) return;
 
@@ -1799,6 +2071,409 @@ function updateFrameNavigationButtons() {
     } else {
       deepAnalysisProgress.style.display = 'none';
     }
+  }
+
+  // Batch Chart Functions
+  function showBatchChartsInterface() {
+    if (curveDataUpload) {
+      curveDataUpload.style.display = 'block';
+    }
+    if (batchChartsContainer) {
+      batchChartsContainer.style.display = 'block';
+    }
+  }
+
+  function hideBatchChartsInterface() {
+    if (curveDataUpload) {
+      curveDataUpload.style.display = 'none';
+    }
+    if (batchChartsContainer) {
+      batchChartsContainer.style.display = 'none';
+    }
+  }
+
+  // Render batch charts from loaded curve data with virtual scrolling
+  function renderBatchCharts(curveDataArray) {
+    if (!curveDataArray || curveDataArray.length === 0) {
+      alert('没有可显示的曲线数据');
+      return;
+    }
+
+    // Clear existing charts
+    clearBatchCharts();
+
+    // Store curve data
+    batchCurveData = curveDataArray;
+
+    // Set up virtual scrolling
+    setupVirtualScrolling();
+
+    // Create visible charts immediately (viewport optimization)
+    renderVisibleCharts();
+  }
+
+  // Virtual scrolling setup
+  function setupVirtualScrolling() {
+    if (!chartsGrid) return;
+
+    // Set initial grid height
+    const itemHeight = 280; // Approximate height per chart
+    const padding = 32;
+    const maxVisibleCharts = Math.ceil((window.innerHeight - 200) / itemHeight);
+
+    chartsGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(500px, 1fr))';
+    chartsGrid.style.maxHeight = (maxVisibleCharts * itemHeight + padding) + 'px';
+
+    // Add scroll listener for lazy loading
+    chartsGrid.addEventListener('scroll', () => {
+      if (!batchScrolling.active) {
+        batchScrolling.active = true;
+        setTimeout(() => {
+          renderVisibleCharts();
+          batchScrolling.active = false;
+        }, 100); // Debounce scroll events
+      }
+    });
+
+    // Initialize virtual scrolling state
+    batchScrolling = {
+      active: false,
+      visibleStartIndex: 0,
+      visibleEndIndex: maxVisibleCharts,
+      renderedCharts: new Set()
+    };
+  }
+
+  // Render only visible charts
+  function renderVisibleCharts() {
+    if (!chartsGrid || !batchCurveData.length) return;
+
+    const containerRect = chartsGrid.getBoundingClientRect();
+    const scrollTop = chartsGrid.scrollTop;
+    const itemHeight = 280;
+    const padding = 32;
+
+    // Calculate visible range
+    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight));
+    const endIndex = Math.min(
+      batchCurveData.length,
+      Math.ceil((scrollTop + containerRect.height) / itemHeight)
+    );
+
+    // Remove charts that are no longer visible
+    const visibleRange = new Set();
+    for (let i = startIndex; i < endIndex; i++) {
+      visibleRange.add(i);
+    }
+
+    // Remove off-screen charts
+    batchChartInstances = batchChartInstances.filter((canvas, index) => {
+      if (canvas && canvas.parentNode) {
+        const canvasIndex = parseInt(canvas.id.replace('batchChartCanvas_', ''));
+        if (!visibleRange.has(canvasIndex)) {
+          canvas.parentNode.remove();
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Add new visible charts
+    for (let i = startIndex; i < endIndex && i < batchCurveData.length; i++) {
+      if (!batchScrolling.renderedCharts.has(i)) {
+        const videoData = batchCurveData[i];
+        createBatchChart(videoData, i);
+        batchScrolling.renderedCharts.add(i);
+      }
+    }
+
+    // Update virtual scrolling state
+    batchScrolling.visibleStartIndex = startIndex;
+    batchScrolling.visibleEndIndex = endIndex;
+  }
+
+  // Create a single batch chart
+  function createBatchChart(videoData, index) {
+    if (!videoData.curves || !videoData.curves.time) {
+      console.warn(`Invalid curve data for video: ${videoData.fileName}`);
+      return;
+    }
+
+    const chartContainer = document.createElement('div');
+    chartContainer.className = 'batch-chart-item';
+    chartContainer.innerHTML = `
+      <div class="batch-chart-header">
+        <span class="chart-title">${videoData.fileName}</span>
+        <span class="chart-info">时长: ${videoData.duration.toFixed(1)}s</span>
+      </div>
+      <div class="batch-chart-canvas">
+        <canvas id="batchChartCanvas_${index}" width="400" height="200"></canvas>
+      </div>
+    `;
+
+    if (chartsGrid) {
+      chartsGrid.appendChild(chartContainer);
+    }
+
+    // Render chart on canvas
+    const canvas = document.getElementById(`batchChartCanvas_${index}`);
+    if (canvas) {
+      renderBatchChartCanvas(canvas, videoData.curves, videoData.fileName);
+      batchChartInstances.push(canvas);
+    }
+  }
+
+  // Render chart on canvas element
+  function renderBatchChartCanvas(canvas, curves, fileName) {
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Setup chart dimensions
+    const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    if (curves.time.length === 0) return;
+
+    // Calculate data ranges
+    const minTime = Math.min(...curves.time);
+    const maxTime = Math.max(...curves.time);
+    const timeRange = maxTime - minTime || 1;
+
+    // Calculate Y range for all visible curves
+    let minY = Infinity, maxY = -Infinity;
+    const visibleCurves = [
+      { data: curves.white, color: '#ffffff', label: 'white' },
+      { data: curves.blue, color: '#4fc3f7', label: 'blue' },
+      { data: curves.yellow, color: '#fbbf24', label: 'yellow' },
+      { data: curves.pink, color: '#f9a8d4', label: 'pink' },
+      { data: curves.purple, color: '#a855f7', label: 'purple' }
+    ].filter(curve => {
+      switch(curve.label) {
+        case 'white': return batchChartState.showWhite;
+        case 'blue': return batchChartState.showBlue;
+        case 'yellow': return batchChartState.showYellow;
+        case 'pink': return batchChartState.showPink;
+        case 'purple': return batchChartState.showPurple;
+        default: return false;
+      }
+    });
+
+    visibleCurves.forEach(curve => {
+      const validValues = curve.data.filter(v => !isNaN(v) && isFinite(v));
+      if (validValues.length > 0) {
+        minY = Math.min(minY, ...validValues);
+        maxY = Math.max(maxY, ...validValues);
+      }
+    });
+
+    if (!isFinite(minY) || !isFinite(maxY)) {
+      minY = -10;
+      maxY = 10;
+    }
+
+    const yRange = maxY - minY || 1;
+
+    // Draw background
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw grid
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+
+    // Horizontal grid lines
+    for (let i = 0; i <= 5; i++) {
+      const y = padding.top + (chartHeight * i / 5);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+
+      // Y labels
+      const value = maxY - (yRange * i / 5);
+      ctx.fillStyle = '#9da0a6';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(value.toFixed(1), padding.left - 5, y + 3);
+    }
+
+    // Vertical grid lines
+    for (let i = 0; i <= 5; i++) {
+      const x = padding.left + (chartWidth * i / 5);
+      ctx.beginPath();
+      ctx.moveTo(x, padding.top);
+      ctx.lineTo(x, height - padding.bottom);
+      ctx.stroke();
+
+      // X labels
+      const time = minTime + (timeRange * i / 5);
+      ctx.fillStyle = '#9da0a6';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(time.toFixed(1), x, height - padding.bottom + 15);
+    }
+
+    // Draw curves
+    visibleCurves.forEach(curve => {
+      if (curve.data.length !== curves.time.length) return;
+
+      ctx.strokeStyle = curve.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      let started = false;
+      for (let i = 0; i < curves.time.length; i++) {
+        const x = padding.left + ((curves.time[i] - minTime) / timeRange * chartWidth);
+        const y = padding.top + ((maxY - curve.data[i]) / yRange * chartHeight);
+
+        if (isFinite(x) && isFinite(y)) {
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+      }
+
+      ctx.stroke();
+    });
+
+    // Draw title
+    ctx.fillStyle = '#e5e5e5';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(fileName, width / 2, 15);
+  }
+
+  // Clear all batch charts
+  function clearBatchCharts() {
+    if (chartsGrid) {
+      chartsGrid.innerHTML = '';
+    }
+    batchChartInstances = [];
+    batchCurveData = [];
+
+    // 清除虚拟滚动状态
+    batchScrolling = { active: false, visibleStartIndex: 0, visibleEndIndex: 0, renderedCharts: new Set() };
+
+    // 清除事件监听器
+    if (batchScrolling.scrollListener) {
+      chartsGrid.removeEventListener('scroll', batchScrolling.scrollListener);
+      batchScrolling.scrollListener = null;
+    }
+    if (batchScrolling.resizeListener) {
+      window.removeEventListener('resize', batchScrolling.resizeListener);
+      batchScrolling.resizeListener = null;
+    }
+
+    console.log('🗑️ 已清除所有批量图表和虚拟滚动状态');
+  }
+
+  // Load curve data from file
+  function loadCurveDataFromFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const content = e.target.result;
+        let data;
+
+        if (file.name.endsWith('.json')) {
+          data = JSON.parse(content);
+          if (data.videos && Array.isArray(data.videos)) {
+            renderBatchCharts(data.videos);
+          } else {
+            alert('JSON文件格式不正确');
+          }
+        } else if (file.name.endsWith('.csv')) {
+          data = parseCSVToCurveData(content);
+          if (data.length > 0) {
+            renderBatchCharts(data);
+          } else {
+            alert('CSV文件格式不正确或无数据');
+          }
+        } else {
+          alert('不支持的文件格式，请选择.json或.csv文件');
+        }
+      } catch (error) {
+        console.error('解析文件失败:', error);
+        alert('解析文件失败: ' + error.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Parse CSV to curve data format
+  function parseCSVToCurveData(csvContent) {
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim());
+    const videosMap = new Map();
+
+    // Process data lines
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      if (values.length !== headers.length) continue;
+
+      const fileName = values[0];
+      const videoId = values[1];
+      const duration = parseFloat(values[2]);
+      const sampleFps = parseInt(values[3]);
+      const time = parseFloat(values[4]);
+      const white = parseFloat(values[5]);
+      const blue = parseFloat(values[6]);
+      const yellow = parseFloat(values[7]);
+      const pink = parseFloat(values[8]);
+      const purple = parseFloat(values[9]);
+
+      const key = `${fileName}_${videoId}`;
+      if (!videosMap.has(key)) {
+        videosMap.set(key, {
+          fileName,
+          videoId,
+          duration,
+          sampleFps,
+          curves: { time: [], white: [], blue: [], yellow: [], pink: [], purple: [] }
+        });
+      }
+
+      const video = videosMap.get(key);
+      video.curves.time.push(time);
+      video.curves.white.push(white);
+      video.curves.blue.push(blue);
+      video.curves.yellow.push(yellow);
+      video.curves.pink.push(pink);
+      video.curves.purple.push(purple);
+    }
+
+    return Array.from(videosMap.values());
+  }
+
+  // Update batch chart visibility based on toggle states
+  function updateBatchChartVisibility() {
+    batchChartState = {
+      showWhite: batchShowWhite ? batchShowWhite.checked : true,
+      showBlue: batchShowBlue ? batchShowBlue.checked : true,
+      showYellow: batchShowYellow ? batchShowYellow.checked : true,
+      showPink: batchShowPink ? batchShowPink.checked : true,
+      showPurple: batchShowPurple ? batchShowPurple.checked : true
+    };
+
+    // Re-render all charts
+    batchCurveData.forEach((videoData, index) => {
+      const canvas = document.getElementById(`batchChartCanvas_${index}`);
+      if (canvas) {
+        renderBatchChartCanvas(canvas, videoData.curves, videoData.fileName);
+      }
+    });
   }
 
 // Batch processing queue engine
@@ -1890,6 +2565,9 @@ function updateFrameNavigationButtons() {
 
     batchQueue.processing = false;
     updateBatchProgress(batchQueue.videos.length, batchQueue.videos.length, '批量分析完成');
+
+    // Enable export controls
+    enableExportControls();
 
     // Select first completed analysis if available
     const completedAnalyses = Array.from(batchAnalyses.values()).filter(a => a.status === 'completed');
@@ -2036,4 +2714,84 @@ function updateFrameNavigationButtons() {
   if (blueMaxThreshEl) {
     blueMaxThreshEl.addEventListener('input', ()=>{ updateBlueJudge(); });
   }
+
+  // Export curve data button
+  if (exportCurveDataBtn) {
+    exportCurveDataBtn.addEventListener('click', () => {
+      exportCurveDataToFiles();
+    });
+  }
+
+  // Batch charts button
+  if (batchChartsBtn) {
+    batchChartsBtn.addEventListener('click', () => {
+      showBatchChartsInterface();
+    });
+  }
+
+  // Clear batch charts button
+  if (clearBatchChartsBtn) {
+    clearBatchChartsBtn.addEventListener('click', () => {
+      clearBatchCharts();
+      hideBatchChartsInterface();
+    });
+  }
+
+  // Curve data file input
+  if (curveDataLoadBtn) {
+    curveDataLoadBtn.addEventListener('click', () => {
+      curveDataFileInput.click();
+    });
+  }
+
+  if (curveDataFileInput) {
+    curveDataFileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        loadCurveDataFromFile(e.target.files[0]);
+        showBatchChartsInterface();
+      }
+    });
+  }
+
+  // Curve data drag and drop
+  if (curveDataDropZone) {
+    curveDataDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      curveDataDropZone.classList.add('drag-over');
+    });
+
+    curveDataDropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      curveDataDropZone.classList.remove('drag-over');
+    });
+
+    curveDataDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      curveDataDropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        loadCurveDataFromFile(e.dataTransfer.files[0]);
+        showBatchChartsInterface();
+      }
+    });
+  }
+
+  // Batch chart curve toggles
+  [batchShowWhite, batchShowBlue, batchShowYellow, batchShowPink, batchShowPurple].forEach((toggle, index) => {
+    if (toggle) {
+      toggle.addEventListener('change', () => {
+        updateBatchChartVisibility();
+      });
+    }
+  });
+
+  // Enable export button when batch analysis completes
+  function enableExportControls() {
+    if (exportCurveDataBtn) {
+      exportCurveDataBtn.disabled = batchAnalyses.size === 0 && deepAnalysisResults.size === 0;
+    }
+    if (batchChartsBtn) {
+      batchChartsBtn.disabled = batchAnalyses.size === 0 && deepAnalysisResults.size === 0;
+    }
+  }
+
 } // Close script scope
