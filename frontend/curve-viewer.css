@@ -347,10 +347,10 @@ body {
 .charts-grid {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 24px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+    gap: 32px;
     align-items: start;
 }
 
@@ -362,6 +362,8 @@ body {
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s, box-shadow 0.2s;
+    min-height: 400px;
+    width: 100%;
 }
 
 .chart-item:hover {
@@ -396,11 +398,12 @@ body {
 }
 
 .chart-canvas-container {
-    padding: 16px;
+    padding: 24px;
     background: var(--bg);
     display: flex;
     justify-content: center;
     align-items: center;
+    min-height: 320px;
 }
 
 .chart-canvas {
@@ -409,6 +412,7 @@ body {
     background: var(--bg);
     max-width: 100%;
     height: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Empty State */
@@ -473,6 +477,13 @@ body {
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+    .charts-grid {
+        grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+        gap: 24px;
+    }
+}
+
 @media (max-width: 1024px) {
     .sidebar {
         width: 280px;
@@ -480,6 +491,17 @@ body {
 
     .charts-grid {
         grid-template-columns: 1fr;
+        gap: 20px;
+        padding: 16px;
+    }
+
+    .chart-item {
+        min-height: 380px;
+    }
+
+    .chart-canvas-container {
+        padding: 20px;
+        min-height: 280px;
     }
 }
 

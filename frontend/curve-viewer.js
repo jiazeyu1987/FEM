@@ -10,7 +10,7 @@ const app = {
         visibleStartIndex: 0,
         visibleEndIndex: 0,
         renderedCharts: new Set(),
-        itemHeight: 320,
+        itemHeight: 450,
         containerHeight: 0
     },
     viewSettings: {
@@ -591,8 +591,8 @@ function createChartElement(videoData, index) {
     // Create canvas
     const canvas = document.createElement('canvas');
     canvas.className = 'chart-canvas';
-    canvas.width = 500;
-    canvas.height = 250;
+    canvas.width = 550;
+    canvas.height = 280;
 
     // Store canvas reference
     app.chartInstances.set(index, canvas);
