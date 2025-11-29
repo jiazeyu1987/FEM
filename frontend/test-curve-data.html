@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试曲线数据</title>
+</head>
+<body>
+    <h1>曲线数据测试</h1>
+    <button id="testJSON">生成测试JSON数据</button>
+    <button id="testCSV">生成测试CSV数据</button>
+    <div id="output"></div>
+
+    <script>
+        // Generate test data for curve viewer
+        function generateTestData() {
+            const videos = [];
+            const numVideos = 5;
+            const fps = 8;
+            const duration = 5; // seconds
+
+            for (let i = 0; i < numVideos; i++) {
+                const numPoints = duration * fps;
+                const time = [];
+                const white = [];
+                const blue = [];
+                const yellow = [];
+                const pink = [];
+                const purple = [];
+
+                for (let j = 0; j < numPoints; j++) {
+                    const t = j / fps;
+                    time.push(t);
+
+                    // Generate realistic-looking curves with more variation
+                    const baseWhite = 200 + Math.sin(t * 2) * 50;
+                    white.push(baseWhite + (Math.random() - 0.5) * 20);
+
+                    // Blue curve should have more variation
+                    const baseBlue = Math.sin(t * 1.5) * 30 + Math.cos(t * 0.8) * 15;
+                    blue.push(baseBlue + (Math.random() - 0.5) * 10);
+
+                    // Yellow curve with interesting patterns
+                    const baseYellow = Math.cos(t * 3) * 15 + Math.sin(t * 0.5) * 8;
+                    yellow.push(baseYellow + (Math.random() - 0.5) * 5);
+
+                    // Pink curve with noise
+                    const basePink = 20 + Math.sin(t * 4) * 8 + Math.cos(t * 2) * 5;
+                    pink.push(Math.max(5, basePink + (Math.random() - 0.5) * 4));
+
+                    // Purple curve with percentage-like values (0-100)
+                    const basePurple = 30 + Math.cos(t * 2) * 20 + Math.sin(t * 0.3) * 10;
+                    purple.push(Math.max(0, Math.min(100, basePurple + (Math.random() - 0.5) * 8)));
+                }
+
+                videos.push({
+                    fileName: `test_video_${String(i + 1).padStart(3, '0')}.mp4`,
+                    videoId: `video_${i}_${Date.now()}`,
+                    duration: duration,
+                    sampleFps: fps,
+                    curves: {
+                        time: time,
+                        white: white,
+                        blue: blue,
+                        yellow: yellow,
+                        pink: pink,
+                        purple: purple
+                    }
+                });
+            }
+
+            return {
+                exportTime: new Date().toISOString(),
+                totalVideos: numVideos,
+                videos: videos
+            };
+        }
+
+        function downloadJSON() {
+            const data = generateTestData();
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test_curve_data_${Date.now()}.json`;
+            a.click();
+
+            URL.revokeObjectURL(url);
+            document.getElementById('output').textContent = 'JSON测试数据已生成并下载';
+        }
+
+        function downloadCSV() {
+            const data = generateTestData();
+            let csv = '文件名,时间点(s),白曲线,蓝曲线,黄曲线,粉曲线,紫曲线\n';
+
+            data.videos.forEach(video => {
+                for (let i = 0; i < video.curves.time.length; i++) {
+                    csv += `${video.fileName},${video.curves.time[i].toFixed(3)},`;
+                    csv += `${video.curves.white[i].toFixed(1)},`;
+                    csv += `${video.curves.blue[i].toFixed(3)},`;
+                    csv += `${video.curves.yellow[i].toFixed(3)},`;
+                    csv += `${video.curves.pink[i].toFixed(3)},`;
+                    csv += `${video.curves.purple[i].toFixed(1)}\n`;
+                }
+            });
+
+            // Add UTF-8 BOM for proper Chinese character display
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test_curve_data_${Date.now()}.csv`;
+            a.click();
+
+            URL.revokeObjectURL(url);
+            document.getElementById('output').textContent = 'CSV测试数据已生成并下载';
+        }
+
+        // Setup event listeners
+        document.getElementById('testJSON').addEventListener('click', downloadJSON);
+        document.getElementById('testCSV').addEventListener('click', downloadCSV);
+    </script>
+</body>
+</html>

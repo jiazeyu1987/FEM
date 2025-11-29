@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEM曲线数据可视化工具</title>
+    <link rel="stylesheet" href="curve-viewer.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="titlebar">
+            <div class="title-left">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+            </div>
+            <div class="title">HEM曲线可视化工具</div>
+            <div class="title-right">Curve Viewer v1.0</div>
+        </header>
+
+        <!-- Main Container -->
+        <div class="container">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <!-- File Upload Section -->
+                <div class="section">
+                    <label class="label">加载曲线数据文件</label>
+                    <div class="drop-zone" id="dropZone">
+                        <div class="drop-zone-content">
+                            <p class="drop-zone-text">拖拽曲线文件到此处</p>
+                            <p class="drop-zone-text">或</p>
+                            <input type="file" id="fileInput" accept=".json,.csv" style="display: none;">
+                            <button type="button" id="loadBtn" class="load-btn">选择文件</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Info -->
+                <div class="section" id="fileInfo" style="display: none;">
+                    <label class="label">文件信息</label>
+                    <div class="file-info-content">
+                        <div class="info-row">
+                            <span class="info-label">文件名:</span>
+                            <span id="fileName" class="info-value">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">视频数量:</span>
+                            <span id="videoCount" class="info-value">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">导出时间:</span>
+                            <span id="exportTime" class="info-value">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Curve Controls -->
+                <div class="section" id="curveControls" style="display: none;">
+                    <label class="label">曲线显示控制</label>
+                    <div class="curve-toggle">
+                        <label><input type="checkbox" id="showWhite" checked> 白曲线 (ROI)</label>
+                        <label><input type="checkbox" id="showBlue" checked> 蓝曲线 (Δv)</label>
+                        <label><input type="checkbox" id="showYellow" checked> 黄曲线 (dΔv)</label>
+                        <label><input type="checkbox" id="showPink" checked> 粉曲线 (STD)</label>
+                        <label><input type="checkbox" id="showPurple" checked> 紫曲线 (High%)</label>
+                    </div>
+                </div>
+
+                <!-- View Controls -->
+                <div class="section" id="viewControls" style="display: none;">
+                    <label class="label">视图控制</label>
+                    <div class="view-controls">
+                        <button id="zoomInBtn" class="view-btn">放大 +</button>
+                        <button id="zoomOutBtn" class="view-btn">缩小 -</button>
+                        <button id="resetZoomBtn" class="view-btn">重置</button>
+                        <button id="exportImageBtn" class="view-btn primary">导出图片</button>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="section" id="statistics" style="display: none;">
+                    <label class="label">统计信息</label>
+                    <div class="stats-content">
+                        <div class="stat-row">
+                            <span class="stat-label">总图表数:</span>
+                            <span id="totalCharts" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">当前显示:</span>
+                            <span id="visibleCharts" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">缩放级别:</span>
+                            <span id="zoomLevel" class="stat-value">100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="section small" id="status">
+                    <span>准备就绪 - 请加载曲线数据文件</span>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="main">
+                <!-- Loading Indicator -->
+                <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">正在加载曲线数据...</div>
+                </div>
+
+                <!-- Charts Grid -->
+                <div id="chartsContainer" class="charts-container" style="display: none;">
+                    <div class="charts-header">
+                        <h3>曲线图表显示</h3>
+                        <div class="chart-info">
+                            <span id="chartRange">显示所有图表</span>
+                        </div>
+                    </div>
+                    <div id="chartsGrid" class="charts-grid">
+                        <!-- Charts will be dynamically generated here -->
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="empty-state">
+                    <div class="empty-icon">📈</div>
+                    <h2>HEM曲线数据可视化工具</h2>
+                    <p>拖拽或选择导出的曲线数据文件（JSON或CSV格式）</p>
+                    <div class="features">
+                        <div class="feature">
+                            <span class="feature-icon">📊</span>
+                            <span>支持多组5曲线数据显示</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">🎨</span>
+                            <span>交互式曲线显示控制</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">💾</span>
+                            <span>导出高清图表图片</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="curve-viewer.js"></script>
+</body>
+</html>
