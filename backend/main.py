@@ -50,6 +50,7 @@ def compute_series(
     series_t: List[float] = []
     roi_mean: List[float] = []
     ref_mean: List[float] = []
+    roi_std: List[float] = []
 
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -70,6 +71,7 @@ def compute_series(
 
         roi_patch = gray[y0:y1, x0:x1]
         roi_val = float(np.mean(roi_patch)) if roi_patch.size else float("nan")
+        roi_std_val = float(np.std(roi_patch)) if roi_patch.size else float("nan")
 
         if ref_mode == "global":
             ref_val = float(np.mean(gray))
@@ -80,8 +82,9 @@ def compute_series(
         series_t.append(t)
         roi_mean.append(roi_val)
         ref_mean.append(ref_val)
+        roi_std.append(roi_std_val)
 
-    return series_t, roi_mean, ref_mean
+    return series_t, roi_mean, ref_mean, roi_std
 
 
 def moving_average(x: np.ndarray, k: int = 3) -> np.ndarray:
@@ -189,7 +192,7 @@ async def analyze(
             return JSONResponse(status_code=400, content={"error": "Cannot open video"})
 
         roi = {"x": roi_x, "y": roi_y, "w": roi_w, "h": roi_h}
-        t, roi_m, ref_m = compute_series(cap, roi, sample_fps, ref_mode="global")
+        t, roi_m, ref_m, roi_s = compute_series(cap, roi, sample_fps, ref_mode="global")
         cap.release()
 
         params: Dict[str, Any] = {}
@@ -210,7 +213,7 @@ async def analyze(
         )
 
         # Prepare compact series for plotting
-        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf)} for tt, rm, rf in zip(t, roi_m, ref_m)]
+        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf), "std": float(rs)} for tt, rm, rf, rs in zip(t, roi_m, ref_m, roi_s)]
 
         return {
             "has_hem": has_hem,

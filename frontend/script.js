@@ -15,6 +15,7 @@
   const showBlueEl = document.getElementById('showBlue');
   const showYellowEl = document.getElementById('showYellow');
   const showWhiteRoiEl = document.getElementById('showWhiteRoi');
+  const showPinkStdEl = document.getElementById('showPinkStd');
   const sampleFpsEl = document.getElementById('sampleFps');
 
   // Information panel elements
@@ -22,6 +23,7 @@
   const infoBlueValueEl = document.getElementById('infoBlueValue');
   const infoYellowValueEl = document.getElementById('infoYellowValue');
   const infoWhiteValueEl = document.getElementById('infoWhiteValue');
+  const infoPinkValueEl = document.getElementById('infoPinkValue');
   const infoStatusEl = document.getElementById('infoStatus');
   const clearInfoBtn = document.getElementById('clearInfoBtn');
 
@@ -79,7 +81,7 @@
   let roiCenter = null; // center point coordinates {x, y}
   let roiDimensions = {w: 100, h: 200}; // pixel dimensions
   let placingCenter = false;
-  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), yZoom: 1, padLeft: 56 };
+  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), showPinkStd: (showPinkStdEl? showPinkStdEl.checked : true), yZoom: 1, padLeft: 56 };
 
   // Batch analysis variables
   const batchAnalyses = new Map(); // videoId -> analysisData
@@ -501,6 +503,7 @@ function renderResult(data){
   const xs = series.map(p=>p.t);
   const roi = series.map(p=>p.roi);
   const ref = series.map(p=>p.ref);
+  const std = series.map(p=>p.std);
   const dif = roi.map((v,i)=> v - ref[i]);
   const maxJump = (function(arr){ let m=0; for(let i=1;i<arr.length;i++){ m=Math.max(m, arr[i]-arr[i-1]); } return m; })(roi);
   const stats = [
@@ -873,6 +876,13 @@ function getThresholds(){
     const W = targetW; const H = chart.height; ctx.clearRect(0,0,W,H);
     if (!series || !series.length){ return; }
 
+    // Debug: check if series has std data
+    if (series.length > 0 && series[0].hasOwnProperty('std')) {
+      console.log('renderChart: series contains std data, first value:', series[0].std);
+    } else {
+      console.warn('renderChart: series missing std data');
+    }
+
     // data
     const v = series.map(p=>p.roi);
     // 蓝线：当前帧ROI均值 - 之前所有帧ROI均值的平均
@@ -886,6 +896,8 @@ function getThresholds(){
     }
     // 黄线：蓝线的一阶差分，反映蓝线变化
     const d2 = d1.map((_,i)=> i>0 ? (d1[i]-d1[i-1]) : 0);
+    // 粉线：ROI内像素标准差
+    const stdSeries = series.map(p=>p.std);
 
     // window sync to timeline
     let minX = xs[0], maxX = xs[xs.length-1];
@@ -901,6 +913,7 @@ function getThresholds(){
     if (chartState.showBlue) parts.push(inView(d1).length? inView(d1):d1);
     if (chartState.showYellow) parts.push(inView(d2).length? inView(d2):d2);
     if (chartState.showWhiteRoi) parts.push(inView(v).length? inView(v):v);
+    if (chartState.showPinkStd) parts.push(inView(stdSeries).length? inView(stdSeries):stdSeries);
     if (!parts.length){
       // nothing selected, just draw axis baseline
       const padLeft = 56, padRight = 10, padTop = 16, padBottom = 22;
@@ -951,6 +964,28 @@ function getThresholds(){
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
+    if (chartState.showPinkStd){
+      // Debug: log stdSeries data
+      console.log('Pink std data:', stdSeries.slice(0, 5), 'length:', stdSeries.length);
+      ctx.strokeStyle = '#f9a8d4';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let hasValidData = false;
+      xs.forEach((t,i)=>{
+        if (t<minX || t>maxX) return;
+        if (stdSeries[i] !== null && !isNaN(stdSeries[i]) && isFinite(stdSeries[i])) {
+          const x=x2px(t), y=y2px(stdSeries[i]);
+          const prev=i>0 && xs[i-1]>=minX;
+          (prev?ctx.lineTo(x,y):ctx.moveTo(x,y));
+          hasValidData = true;
+        }
+      });
+      if (hasValidData) {
+        ctx.stroke();
+      } else {
+        console.warn('No valid pink std data to render');
+      }
+    }
 
     // labels for meaning
     let tx = padLeft + 4; let ty = padTop - 2; ty = Math.max(14, ty);
@@ -958,6 +993,7 @@ function getThresholds(){
     if (chartState.showBlue){ ctx.fillStyle = '#93c5fd'; ctx.fillText('蓝: 当前帧ROI均值 − 历史均值  X=时间(s)  Y=差值', tx, 14); }
     if (chartState.showYellow){ ctx.fillStyle = '#fbbf24'; ctx.fillText('黄: 上述差值的一阶差分  X=时间(s)  Y=变化量', tx, 28); }
     if (chartState.showWhiteRoi){ ctx.fillStyle = '#ffffff'; ctx.fillText('白: ROI平均灰度值  X=时间(s)  Y=灰度', tx, 42); }
+    if (chartState.showPinkStd){ ctx.fillStyle = '#f9a8d4'; ctx.fillText('粉: ROI内像素标准差  X=时间(s)  Y=标准差', tx, 56); }
 
     // current time line
     if (!isNaN(video.currentTime)){
@@ -971,7 +1007,7 @@ function getThresholds(){
   // Information panel functions
   function interpolateCurveValues(timestamp) {
     if (!analyzedXs.length || !analyzedSeries.length) {
-      return { timestamp, blue: null, yellow: null, white: null, status: '无分析数据' };
+      return { timestamp, blue: null, yellow: null, white: null, pink: null, status: '无分析数据' };
     }
 
     // Find the closest indices in analyzedXs array
@@ -1000,6 +1036,8 @@ function getThresholds(){
     // Calculate curve values at data points
     const leftWhite = leftData.roi;
     const rightWhite = rightData.roi;
+    const leftPink = leftData.std;
+    const rightPink = rightData.std;
 
     // Recalculate blue and yellow values for this specific data
     const v = analyzedSeries.map(p => p.roi);
@@ -1012,6 +1050,7 @@ function getThresholds(){
       acc += v[i];
     }
     const d2 = d1.map((_, i) => i > 0 ? (d1[i] - d1[i - 1]) : 0);
+    const std = analyzedSeries.map(p => p.std);
 
     const leftBlue = d1[leftIdx];
     const rightBlue = d1[rightIdx];
@@ -1019,25 +1058,28 @@ function getThresholds(){
     const rightYellow = d2[rightIdx];
 
     // Perform linear interpolation
-    let blue, yellow, white, status;
+    let blue, yellow, white, pink, status;
 
     if (Math.abs(rightTime - leftTime) < 1e-6) {
       // Exact match or very close points
       blue = leftBlue;
       yellow = leftYellow;
       white = leftWhite;
+      pink = leftPink;
       status = '精确值';
     } else if (timestamp <= analyzedXs[0]) {
       // Before first data point - use first value
       blue = d1[0];
       yellow = d2[0];
       white = v[0];
+      pink = std[0];
       status = '外推值(前)';
     } else if (timestamp >= analyzedXs[analyzedXs.length - 1]) {
       // After last data point - use last value
       blue = d1[d1.length - 1];
       yellow = d2[d2.length - 1];
       white = v[v.length - 1];
+      pink = std[std.length - 1];
       status = '外推值(后)';
     } else {
       // Linear interpolation between points
@@ -1045,14 +1087,15 @@ function getThresholds(){
       blue = leftBlue + (rightBlue - leftBlue) * ratio;
       yellow = leftYellow + (rightYellow - leftYellow) * ratio;
       white = leftWhite + (rightWhite - leftWhite) * ratio;
+      pink = leftPink + (rightPink - leftPink) * ratio;
       status = '插值';
     }
 
-    return { timestamp, blue, yellow, white, status };
+    return { timestamp, blue, yellow, white, pink, status };
   }
 
   function updateInfoPanel(timestamp, values) {
-    if (!infoTimestampEl || !infoBlueValueEl || !infoYellowValueEl || !infoWhiteValueEl || !infoStatusEl) return;
+    if (!infoTimestampEl || !infoBlueValueEl || !infoYellowValueEl || !infoWhiteValueEl || !infoPinkValueEl || !infoStatusEl) return;
 
     // Update timestamp display
     infoTimestampEl.textContent = timestamp.toFixed(3) + 's';
@@ -1061,6 +1104,7 @@ function getThresholds(){
     infoBlueValueEl.textContent = values.blue !== null ? values.blue.toFixed(3) : '--';
     infoYellowValueEl.textContent = values.yellow !== null ? values.yellow.toFixed(3) : '--';
     infoWhiteValueEl.textContent = values.white !== null ? values.white.toFixed(1) : '--';
+    infoPinkValueEl.textContent = values.pink !== null ? values.pink.toFixed(3) : '--';
 
     // Update status
     infoStatusEl.textContent = values.status || '就绪';
@@ -1077,12 +1121,13 @@ function getThresholds(){
   }
 
   function clearInfoPanel() {
-    if (!infoTimestampEl || !infoBlueValueEl || !infoYellowValueEl || !infoWhiteValueEl || !infoStatusEl) return;
+    if (!infoTimestampEl || !infoBlueValueEl || !infoYellowValueEl || !infoWhiteValueEl || !infoPinkValueEl || !infoStatusEl) return;
 
     infoTimestampEl.textContent = '--';
     infoBlueValueEl.textContent = '--';
     infoYellowValueEl.textContent = '--';
     infoWhiteValueEl.textContent = '--';
+    infoPinkValueEl.textContent = '--';
     infoStatusEl.textContent = '点击时间轴查看曲线值';
 
     const infoPanel = document.querySelector('.info-panel');
@@ -1095,6 +1140,7 @@ function getThresholds(){
     chartState.showBlue = showBlueEl ? showBlueEl.checked : true;
     chartState.showYellow = showYellowEl ? showYellowEl.checked : true;
     chartState.showWhiteRoi = showWhiteRoiEl ? showWhiteRoiEl.checked : true;
+    chartState.showPinkStd = showPinkStdEl ? showPinkStdEl.checked : true;
     rerenderAll();
   }
   if (showBlueEl) {
@@ -1105,6 +1151,9 @@ function getThresholds(){
   }
   if (showWhiteRoiEl) {
     showWhiteRoiEl.addEventListener('change', syncToggles);
+  }
+  if (showPinkStdEl) {
+    showPinkStdEl.addEventListener('change', syncToggles);
   }
 
   // Clear information panel button
