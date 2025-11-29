@@ -1664,6 +1664,16 @@ function updateFrameNavigationButtons() {
                 avg: statistics.white.avg,
                 max: statistics.white.max,
                 min: statistics.white.min
+              },
+              pink: {
+                avg: statistics.pink.avg,
+                max: statistics.pink.max,
+                min: statistics.pink.min
+              },
+              purple: {
+                avg: statistics.purple.avg,
+                max: statistics.purple.max,
+                min: statistics.purple.min
               }
             }
           };
@@ -1704,7 +1714,7 @@ function updateFrameNavigationButtons() {
     }
 
     // Create CSV content
-    let csvContent = '文件名,区间开始时间,区间结束时间,蓝_平均值,蓝_最大值,蓝_最小值,黄_平均值,黄_最大值,黄_最小值,白_平均值,白_最大值,白_最小值\n';
+    let csvContent = '文件名,区间开始时间,区间结束时间,蓝_平均值,蓝_最大值,蓝_最小值,黄_平均值,黄_最大值,黄_最小值,白_平均值,白_最大值,白_最小值,粉_平均值,粉_最大值,粉_最小值,紫_平均值,紫_最大值,紫_最小值\n';
 
     const results = Array.from(deepAnalysisResults.values());
     console.log(`准备导出 ${results.length} 个结果:`, results.map(r => r.videoName));
@@ -1724,7 +1734,13 @@ function updateFrameNavigationButtons() {
           result.statistics.yellow.min.toFixed(3),
           result.statistics.white.avg.toFixed(1),
           result.statistics.white.max.toFixed(1),
-          result.statistics.white.min.toFixed(1)
+          result.statistics.white.min.toFixed(1),
+          result.statistics.pink.avg.toFixed(3),
+          result.statistics.pink.max.toFixed(3),
+          result.statistics.pink.min.toFixed(3),
+          result.statistics.purple.avg.toFixed(1),
+          result.statistics.purple.max.toFixed(1),
+          result.statistics.purple.min.toFixed(1)
         ];
         csvContent += row.join(',') + '\n';
         exportedCount++;
@@ -1735,6 +1751,11 @@ function updateFrameNavigationButtons() {
           result.videoName,
           '无区间',
           '无区间',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
           'N/A',
           'N/A',
           'N/A',
