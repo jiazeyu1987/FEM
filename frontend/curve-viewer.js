@@ -20,8 +20,13 @@ const app = {
         showYellow: true,
         showPink: true,
         showPurple: true,
-        columnsPerRow: 'auto' // 'auto' or number 1-6
+        columnsPerRow: 'auto', // 'auto' or number 1-6
+        batchSelectMode: false
     },
+    selectedCharts: new Set(),
+    greenCharts: new Set(),
+    redCharts: new Set(),
+    whiteCharts: new Set(),
     isLoading: false,
     currentFile: null
 };
@@ -117,6 +122,17 @@ function cacheElements() {
     // Layout control elements
     elements.layoutButtons = document.querySelectorAll('.layout-btn');
 
+    // Batch selection elements
+    elements.batchSelectMode = document.getElementById('batchSelectMode');
+    elements.batchActions = document.getElementById('batchActions');
+    elements.selectAllBtn = document.getElementById('selectAllBtn');
+    elements.clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    elements.markGreenBtn = document.getElementById('markGreenBtn');
+    elements.markRedBtn = document.getElementById('markRedBtn');
+    elements.markWhiteBtn = document.getElementById('markWhiteBtn');
+    elements.clearAllMarksBtn = document.getElementById('clearAllMarksBtn');
+    elements.selectionCount = document.getElementById('selectionCount');
+
     // Statistics elements
     elements.statistics = document.getElementById('statistics');
     elements.totalCharts = document.getElementById('totalCharts');
@@ -185,6 +201,15 @@ function setupEventListeners() {
 
     // Export controls
     elements.exportImageBtn?.addEventListener('click', handleExportImage);
+
+    // Batch selection controls
+    elements.batchSelectMode?.addEventListener('change', handleBatchSelectionMode);
+    elements.selectAllBtn?.addEventListener('click', handleSelectAll);
+    elements.clearSelectionBtn?.addEventListener('click', handleClearSelection);
+    elements.markGreenBtn?.addEventListener('click', handleMarkGreen);
+    elements.markRedBtn?.addEventListener('click', handleMarkRed);
+    elements.markWhiteBtn?.addEventListener('click', handleMarkWhite);
+    elements.clearAllMarksBtn?.addEventListener('click', handleClearAllMarks);
 
     // Charts grid scroll event (for virtual scrolling)
     if (elements.chartsGrid) {
@@ -671,6 +696,29 @@ function createChartElement(videoData, index) {
     canvasContainer.appendChild(canvas);
     chartItem.appendChild(header);
     chartItem.appendChild(canvasContainer);
+
+    // Apply color marks if previously marked
+    if (app.greenCharts.has(index)) {
+        chartItem.classList.add('marked-green');
+    }
+    if (app.redCharts.has(index)) {
+        chartItem.classList.add('marked-red');
+    }
+    if (app.whiteCharts.has(index)) {
+        chartItem.classList.add('marked-white');
+    }
+
+    // Apply selection if currently selected and in batch mode
+    if (app.selectedCharts.has(index) && app.viewSettings.batchSelectMode) {
+        chartItem.classList.add('selected');
+    }
+
+    // Add click handler for batch selection mode
+    if (app.viewSettings.batchSelectMode) {
+        chartItem.style.cursor = 'pointer';
+        chartItem._clickHandler = (e) => handleChartClick(e, index);
+        chartItem.addEventListener('click', chartItem._clickHandler);
+    }
 
     // Render chart on canvas
     setTimeout(() => {
@@ -1431,6 +1479,190 @@ window.addEventListener('unhandledrejection', (event) => {
     console.error('❌ Unhandled promise rejection:', event.reason);
     updateStatus('❌ 异步操作失败');
 });
+
+// Batch Selection Functions
+function handleBatchSelectionMode(event) {
+    const isEnabled = event.target.checked;
+    app.viewSettings.batchSelectMode = isEnabled;
+
+    console.log('🔄 Batch selection mode:', isEnabled ? 'enabled' : 'disabled');
+
+    // Show/hide batch actions
+    if (elements.batchActions) {
+        elements.batchActions.style.display = isEnabled ? 'flex' : 'none';
+    }
+
+    // Update chart items for selection mode
+    const chartItems = document.querySelectorAll('.chart-item');
+    chartItems.forEach((chartItem, index) => {
+        if (isEnabled) {
+            chartItem.style.cursor = 'pointer';
+            // Remove any existing listener to avoid duplicates
+            chartItem.removeEventListener('click', chartItem._clickHandler);
+            chartItem._clickHandler = (e) => handleChartClick(e, index);
+            chartItem.addEventListener('click', chartItem._clickHandler);
+        } else {
+            chartItem.style.cursor = 'default';
+            // Remove the stored listener reference
+            if (chartItem._clickHandler) {
+                chartItem.removeEventListener('click', chartItem._clickHandler);
+                delete chartItem._clickHandler;
+            }
+            // Remove selection visual
+            chartItem.classList.remove('selected');
+        }
+    });
+
+    // Clear selection when disabling batch mode
+    if (!isEnabled) {
+        app.selectedCharts.clear();
+        updateSelectionCount();
+    }
+}
+
+function handleChartClick(event, chartIndex) {
+    if (!app.viewSettings.batchSelectMode) return;
+
+    // Prevent default chart interaction
+    event.stopPropagation();
+    event.preventDefault();
+
+    const chartItem = event.currentTarget;
+
+    // Toggle selection
+    if (app.selectedCharts.has(chartIndex)) {
+        app.selectedCharts.delete(chartIndex);
+        chartItem.classList.remove('selected');
+    } else {
+        app.selectedCharts.add(chartIndex);
+        chartItem.classList.add('selected');
+    }
+
+    console.log('📊 Chart selection toggled:', chartIndex, 'Selected:', app.selectedCharts.has(chartIndex));
+    updateSelectionCount();
+}
+
+function handleSelectAll() {
+    if (!app.viewSettings.batchSelectMode) return;
+
+    app.selectedCharts.clear();
+    const chartItems = document.querySelectorAll('.chart-item');
+
+    chartItems.forEach((chartItem, index) => {
+        app.selectedCharts.add(index);
+        chartItem.classList.add('selected');
+    });
+
+    console.log('🎯 Selected all charts:', app.selectedCharts.size);
+    updateSelectionCount();
+}
+
+function handleClearSelection() {
+    app.selectedCharts.clear();
+    const chartItems = document.querySelectorAll('.chart-item');
+
+    chartItems.forEach((chartItem) => {
+        chartItem.classList.remove('selected');
+    });
+
+    console.log('🧹 Cleared all selections');
+    updateSelectionCount();
+}
+
+function handleMarkGreen() {
+    markChartsAsColor('green', app.greenCharts, '🟢');
+}
+
+function handleMarkRed() {
+    markChartsAsColor('red', app.redCharts, '🔴');
+}
+
+function handleMarkWhite() {
+    markChartsAsColor('white', app.whiteCharts, '⚪');
+}
+
+function markChartsAsColor(color, colorSet, emoji) {
+    if (app.selectedCharts.size === 0) {
+        console.warn(`⚠️ No charts selected to mark as ${color}`);
+        return;
+    }
+
+    console.log(`${emoji} Marking ${app.selectedCharts.size} charts as ${color}`);
+
+    app.selectedCharts.forEach(chartIndex => {
+        // Remove from other color sets (mutual exclusive)
+        if (color !== 'green') {
+            app.greenCharts.delete(chartIndex);
+        }
+        if (color !== 'red') {
+            app.redCharts.delete(chartIndex);
+        }
+        if (color !== 'white') {
+            app.whiteCharts.delete(chartIndex);
+        }
+
+        // Add to current color set
+        colorSet.add(chartIndex);
+
+        // Update UI
+        const chartItem = document.querySelectorAll('.chart-item')[chartIndex];
+        if (chartItem) {
+            // Remove all color classes first
+            chartItem.classList.remove('marked-green', 'marked-red', 'marked-white');
+            // Add current color class
+            chartItem.classList.add(`marked-${color}`);
+        }
+    });
+
+    updateSelectionCount();
+}
+
+function handleClearAllMarks() {
+    console.log('🧹 Clearing all color marks from all charts');
+
+    // Clear all color sets
+    app.greenCharts.clear();
+    app.redCharts.clear();
+    app.whiteCharts.clear();
+
+    // Remove all color classes from UI
+    const chartItems = document.querySelectorAll('.chart-item');
+
+    chartItems.forEach((chartItem) => {
+        chartItem.classList.remove('marked-green', 'marked-red', 'marked-white');
+    });
+
+    updateSelectionCount();
+}
+
+function updateSelectionCount() {
+    const selectedCount = app.selectedCharts.size;
+    const greenCount = app.greenCharts.size;
+    const redCount = app.redCharts.size;
+    const whiteCount = app.whiteCharts.size;
+    const totalMarked = greenCount + redCount + whiteCount;
+
+    if (elements.selectionCount) {
+        elements.selectionCount.textContent = `已选择: ${selectedCount} 个图表 | 🟢${greenCount} 🔴${redCount} ⚪${whiteCount}`;
+    }
+
+    // Update button states
+    const hasSelection = selectedCount > 0;
+    const hasMarks = totalMarked > 0;
+
+    if (elements.markGreenBtn) {
+        elements.markGreenBtn.disabled = !hasSelection;
+    }
+    if (elements.markRedBtn) {
+        elements.markRedBtn.disabled = !hasSelection;
+    }
+    if (elements.markWhiteBtn) {
+        elements.markWhiteBtn.disabled = !hasSelection;
+    }
+    if (elements.clearAllMarksBtn) {
+        elements.clearAllMarksBtn.disabled = !hasMarks;
+    }
+}
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {

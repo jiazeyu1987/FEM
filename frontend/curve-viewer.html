@@ -102,6 +102,35 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Batch Selection Controls -->
+                    <div class="batch-controls">
+                        <label class="label">批量操作</label>
+                        <div class="batch-selection">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="batchSelectMode">
+                                <span class="checkmark"></span>
+                                批量选择模式
+                            </label>
+                            <div class="batch-actions" id="batchActions" style="display: none;">
+                                <button id="selectAllBtn" class="batch-btn">全选</button>
+                                <button id="clearSelectionBtn" class="batch-btn">清除选择</button>
+
+                                <div class="mark-actions">
+                                    <button id="markGreenBtn" class="batch-btn green">标记为绿色</button>
+                                    <button id="markRedBtn" class="batch-btn red">标记为红色</button>
+                                    <button id="markWhiteBtn" class="batch-btn white">标记为白色</button>
+                                </div>
+
+                                <div class="clear-actions">
+                                    <button id="clearAllMarksBtn" class="batch-btn secondary">清除所有标记</button>
+                                </div>
+                            </div>
+                            <div class="selection-info">
+                                <span id="selectionCount">已选择: 0 个图表</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Statistics -->
