@@ -218,6 +218,99 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    margin-bottom: 16px;
+}
+
+.zoom-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.preset-btn {
+    padding: 6px 10px;
+    background: #374151;
+    color: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s;
+    flex: 1;
+    min-width: 45px;
+}
+
+.preset-btn:hover {
+    background: #1f2937;
+    border-color: var(--blue);
+}
+
+.preset-btn.active {
+    background: var(--blue);
+    border-color: #0b5a86;
+}
+
+/* Layout Controls */
+.layout-controls {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.layout-row-control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.layout-label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.layout-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.layout-btn {
+    padding: 6px 10px;
+    background: #374151;
+    color: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s;
+    flex: 1;
+    min-width: 40px;
+}
+
+.layout-btn:hover {
+    background: #1f2937;
+    border-color: var(--blue);
+}
+
+.layout-btn.active {
+    background: var(--green);
+    border-color: #16a34a;
+    color: white;
+}
+
+.layout-btn.auto-btn {
+    background: var(--blue);
+    border-color: #0b5a86;
+}
+
+.layout-btn.auto-btn.active {
+    background: var(--green);
+    border-color: #16a34a;
 }
 
 .view-btn {
@@ -349,9 +442,11 @@ body {
     overflow-y: auto;
     padding: 24px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
-    gap: 32px;
+    grid-template-columns: 1fr; /* Will be dynamically updated by JavaScript */
+    gap: 32px; /* Will be dynamically updated by JavaScript */
     align-items: start;
+    justify-items: stretch; /* Allow charts to fill grid cells */
+    justify-content: center; /* Center the grid itself */
 }
 
 /* Chart Item Styles */
@@ -362,8 +457,13 @@ body {
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s, box-shadow 0.2s;
-    min-height: 400px;
-    width: 100%;
+    min-height: 300px; /* Will be dynamically updated by JavaScript */
+    width: 100%; /* Allow flexible width in grid */
+    max-width: 400px; /* Maximum width for charts */
+    min-width: 250px; /* Minimum width for charts */
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0; /* Prevent items from shrinking */
 }
 
 .chart-item:hover {
@@ -407,12 +507,14 @@ body {
 }
 
 .chart-canvas {
-    border: 1px solid #333;
+    border: 2px solid #4fc3f7; /* Bright border for debugging */
     border-radius: 4px;
     background: var(--bg);
     max-width: 100%;
-    height: auto;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    display: block; /* Ensure canvas doesn't have extra spacing issues */
+    min-width: 200px;
+    min-height: 150px;
 }
 
 /* Empty State */

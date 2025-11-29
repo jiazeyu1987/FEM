@@ -71,10 +71,36 @@
                 <div class="section" id="viewControls" style="display: none;">
                     <label class="label">视图控制</label>
                     <div class="view-controls">
+                        <button id="zoomFitBtn" class="view-btn primary">适应屏幕</button>
                         <button id="zoomInBtn" class="view-btn">放大 +</button>
                         <button id="zoomOutBtn" class="view-btn">缩小 -</button>
                         <button id="resetZoomBtn" class="view-btn">重置</button>
                         <button id="exportImageBtn" class="view-btn primary">导出图片</button>
+                    </div>
+                    <div class="zoom-presets">
+                        <label class="label">快速缩放:</label>
+                        <button class="preset-btn" data-zoom="0.5">50%</button>
+                        <button class="preset-btn" data-zoom="0.75">75%</button>
+                        <button class="preset-btn" data-zoom="1.0">100%</button>
+                        <button class="preset-btn" data-zoom="1.5">150%</button>
+                        <button class="preset-btn" data-zoom="2.0">200%</button>
+                    </div>
+
+                    <!-- Layout Controls -->
+                    <div class="layout-controls">
+                        <label class="label">布局设置</label>
+                        <div class="layout-row-control">
+                            <label class="layout-label">每行显示数量:</label>
+                            <div class="layout-buttons">
+                                <button class="layout-btn auto-btn" data-columns="auto">自动</button>
+                                <button class="layout-btn" data-columns="1">1列</button>
+                                <button class="layout-btn" data-columns="2">2列</button>
+                                <button class="layout-btn" data-columns="3">3列</button>
+                                <button class="layout-btn" data-columns="4">4列</button>
+                                <button class="layout-btn" data-columns="5">5列</button>
+                                <button class="layout-btn" data-columns="6">6列</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -87,12 +113,16 @@
                             <span id="totalCharts" class="stat-value">0</span>
                         </div>
                         <div class="stat-row">
-                            <span class="stat-label">当前显示:</span>
-                            <span id="visibleCharts" class="stat-value">0</span>
+                            <span class="stat-label">布局:</span>
+                            <span id="layoutInfo" class="stat-value">1列×1行</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label">缩放级别:</span>
                             <span id="zoomLevel" class="stat-value">100%</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">空间利用率:</span>
+                            <span id="spaceUtilization" class="stat-value">0%</span>
                         </div>
                     </div>
                 </div>

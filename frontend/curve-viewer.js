@@ -19,7 +19,8 @@ const app = {
         showBlue: true,
         showYellow: true,
         showPink: true,
-        showPurple: true
+        showPurple: true,
+        columnsPerRow: 'auto' // 'auto' or number 1-6
     },
     isLoading: false,
     currentFile: null
@@ -50,6 +51,9 @@ const elements = {
     zoomOutBtn: null,
     resetZoomBtn: null,
     exportImageBtn: null,
+
+    // Layout controls
+    layoutButtons: null,
 
     // Statistics
     statistics: null,
@@ -110,11 +114,15 @@ function cacheElements() {
     elements.resetZoomBtn = document.getElementById('resetZoomBtn');
     elements.exportImageBtn = document.getElementById('exportImageBtn');
 
+    // Layout control elements
+    elements.layoutButtons = document.querySelectorAll('.layout-btn');
+
     // Statistics elements
     elements.statistics = document.getElementById('statistics');
     elements.totalCharts = document.getElementById('totalCharts');
-    elements.visibleCharts = document.getElementById('visibleCharts');
+    elements.layoutInfo = document.getElementById('layoutInfo');
     elements.zoomLevel = document.getElementById('zoomLevel');
+    elements.spaceUtilization = document.getElementById('spaceUtilization');
 
     // Main content elements
     elements.loadingIndicator = document.getElementById('loadingIndicator');
@@ -153,6 +161,27 @@ function setupEventListeners() {
     elements.zoomInBtn?.addEventListener('click', () => handleZoom(1.2));
     elements.zoomOutBtn?.addEventListener('click', () => handleZoom(0.8));
     elements.resetZoomBtn?.addEventListener('click', () => handleZoom(1.0, true));
+
+    // Fit to screen button
+    document.getElementById('zoomFitBtn')?.addEventListener('click', handleFitToScreen);
+
+    // Preset zoom buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const zoomLevel = parseFloat(e.target.dataset.zoom);
+            if (zoomLevel) {
+                handleZoomToLevel(zoomLevel);
+            }
+        });
+    });
+
+    // Layout control buttons
+    elements.layoutButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const columns = e.target.dataset.columns;
+            handleLayoutChange(columns);
+        });
+    });
 
     // Export controls
     elements.exportImageBtn?.addEventListener('click', handleExportImage);
@@ -225,6 +254,7 @@ async function loadFile(file) {
             showChartsInterface();
             renderAllCharts();
             updateStatistics();
+            updatePresetButtonStates();
 
             updateStatus(`✅ 成功加载 ${parsedData.length} 个视频的曲线数据`);
             console.log('✅ File loaded successfully:', {
@@ -429,12 +459,35 @@ function updateStatistics() {
         elements.totalCharts.textContent = totalCharts;
     }
 
-    if (elements.visibleCharts) {
-        elements.visibleCharts.textContent = visibleCharts;
+    // Update layout info
+    if (elements.layoutInfo && elements.chartsGrid) {
+        const gridStyle = window.getComputedStyle(elements.chartsGrid);
+        const gridColumns = gridStyle.gridTemplateColumns;
+        const columnCount = gridColumns.includes('fr') ? gridColumns.split(' ').length : 1;
+        const rows = Math.ceil(totalCharts / columnCount);
+        elements.layoutInfo.textContent = `${columnCount}列×${rows}行`;
     }
 
     if (elements.zoomLevel) {
         elements.zoomLevel.textContent = Math.round(app.viewSettings.zoom * 100) + '%';
+    }
+
+    // Update space utilization
+    if (elements.spaceUtilization && elements.chartsGrid) {
+        const containerWidth = elements.chartsGrid.clientWidth;
+        const containerHeight = elements.chartsGrid.clientHeight;
+        const baseChartWidth = 600 * app.viewSettings.zoom;
+        const baseChartHeight = 400 * app.viewSettings.zoom;
+
+        const gridStyle = window.getComputedStyle(elements.chartsGrid);
+        const columnCount = gridStyle.gridTemplateColumns.includes('fr') ? gridStyle.gridTemplateColumns.split(' ').length : 1;
+        const rows = Math.ceil(totalCharts / columnCount);
+        const gap = parseInt(gridStyle.gap) || 32;
+
+        const utilizedWidth = columnCount * baseChartWidth + (columnCount - 1) * gap;
+        const utilizedHeight = rows * baseChartHeight + (rows - 1) * gap;
+        const utilization = Math.round((utilizedWidth / containerWidth + utilizedHeight / containerHeight) / 2 * 100);
+        elements.spaceUtilization.textContent = `${utilization}%`;
     }
 
     if (elements.chartRange) {
@@ -477,13 +530,18 @@ function renderAllCharts() {
     // Clear existing charts
     clearCharts();
 
-    // Setup virtual scrolling if needed
-    if (app.filteredData.length > 20) {
-        setupVirtualScrolling();
-    } else {
-        // Render all charts directly for small datasets
-        renderChartsDirectly();
-    }
+    // Render all charts directly without virtual scrolling
+    app.filteredData.forEach((videoData, index) => {
+        const chartElement = createChartElement(videoData, index);
+        elements.chartsGrid?.appendChild(chartElement);
+    });
+
+    // Apply smart layout after charts are added to DOM
+    setTimeout(() => {
+        applyInitialLayout();
+    }, 100);
+
+    updateStatistics();
 }
 
 function clearCharts() {
@@ -493,6 +551,18 @@ function clearCharts() {
 
     app.chartInstances.clear();
     app.virtualScrolling.renderedCharts.clear();
+}
+
+function applyInitialLayout() {
+    if (!elements.chartsGrid || app.filteredData.length === 0) return;
+
+    console.log('📐 Applying initial layout for', app.filteredData.length, 'charts');
+
+    // Initialize layout button states
+    updateLayoutButtonStates(app.viewSettings.columnsPerRow);
+
+    // Apply layout using the new layout system
+    applyLayoutWithColumns(app.viewSettings.columnsPerRow);
 }
 
 function renderChartsDirectly() {
@@ -619,8 +689,26 @@ function renderChartOnCanvas(canvas, videoData) {
         hasCurves: !!curves,
         timeLength: curves?.time?.length,
         whiteLength: curves?.white?.length,
-        blueLength: curves?.blue?.length
+        blueLength: curves?.blue?.length,
+        canvasDimensions: {
+            width: canvas.width,
+            height: canvas.height,
+            style: `${canvas.style.width} x ${canvas.style.height}`,
+            clientWidth: canvas.clientWidth,
+            clientHeight: canvas.clientHeight,
+            display: getComputedStyle(canvas).display
+        }
     });
+
+    // Simple test to verify canvas is working
+    if (canvas.width === 0 || canvas.height === 0) {
+        console.error('❌ Canvas has zero dimensions!', {
+            canvasWidth: canvas.width,
+            canvasHeight: canvas.height,
+            fileName: videoData.fileName
+        });
+        return;
+    }
 
     if (!curves || !curves.time || curves.time.length === 0) {
         console.warn('No curve data available for:', videoData.fileName);
@@ -722,7 +810,7 @@ function renderChartOnCanvas(canvas, videoData) {
         console.log(`✏️ Drawing ${config.key} curve with ${curves[config.key].length} points`);
 
         ctx.strokeStyle = config.color;
-        ctx.lineWidth = Math.max(1, config.width * app.viewSettings.zoom);
+        ctx.lineWidth = config.width; // Use constant line width, size is controlled by CSS
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
@@ -848,13 +936,235 @@ function handleZoom(factor, reset = false) {
     if (reset) {
         app.viewSettings.zoom = 1.0;
     } else {
-        app.viewSettings.zoom = Math.max(0.5, Math.min(3.0, app.viewSettings.zoom * factor));
+        app.viewSettings.zoom = Math.max(0.3, Math.min(2.0, app.viewSettings.zoom * factor));
     }
 
-    reRenderCharts();
+    // Apply layout update
+    setTimeout(() => {
+        applyInitialLayout();
+    }, 50);
+
+    updateStatistics();
+    updatePresetButtonStates();
+
+    console.log('🔍 Chart zoom level:', app.viewSettings.zoom);
+}
+
+function updateChartSizes() {
+    if (!elements.chartsGrid || app.filteredData.length === 0) return;
+
+    // Get available container space
+    const containerWidth = elements.chartsGrid.clientWidth;
+    const containerHeight = elements.chartsGrid.clientHeight;
+    const padding = 48; // Container padding (24px each side)
+
+    const availableWidth = containerWidth - padding;
+    const availableHeight = containerHeight - padding;
+
+    // Base chart dimensions
+    const baseChartWidth = 600;
+    const baseChartHeight = 400;
+
+    // Calculate actual chart size based on zoom
+    const chartWidth = Math.round(baseChartWidth * app.viewSettings.zoom);
+    const chartHeight = Math.round(baseChartHeight * app.viewSettings.zoom);
+
+    // Calculate optimal layout
+    const layout = calculateOptimalLayout(availableWidth, availableHeight, chartWidth, chartHeight, app.filteredData.length);
+
+    // Update grid layout
+    elements.chartsGrid.style.gridTemplateColumns = `repeat(${layout.columns}, 1fr)`;
+    elements.chartsGrid.style.gap = `${layout.gap}px`;
+
+    // Update each chart element
+    app.chartInstances.forEach((canvas, index) => {
+        if (index < app.filteredData.length) {
+            // Find the chart element
+            const chartElement = canvas.closest('.chart-item');
+            const canvasContainer = canvas.closest('.chart-canvas-container');
+
+            if (chartElement) {
+                // Apply calculated dimensions
+                chartElement.style.width = `${layout.actualChartWidth}px`;
+                chartElement.style.minHeight = `${layout.actualChartHeight}px`;
+                chartElement.style.maxWidth = '100%';
+
+                // Update canvas container
+                if (canvasContainer) {
+                    canvasContainer.style.minHeight = `${Math.round(layout.actualChartHeight * 0.7)}px`;
+                }
+
+                // Update canvas dimensions with proper sizing
+                const padding = 40; // Account for internal padding
+                const headerHeight = 60; // Account for chart header
+
+                // Calculate canvas size with minimum dimensions for proper rendering
+                const availableCanvasWidth = Math.max(300, layout.actualChartWidth - padding);
+                const availableCanvasHeight = Math.max(200, layout.actualChartHeight - headerHeight - padding);
+
+                // Maintain aspect ratio (approximately 1.8:1 for good chart rendering)
+                const aspectRatio = 1.8;
+                let canvasWidth, canvasHeight;
+
+                if (availableCanvasWidth / availableCanvasHeight > aspectRatio) {
+                    canvasHeight = availableCanvasHeight;
+                    canvasWidth = Math.round(availableCanvasHeight * aspectRatio);
+                } else {
+                    canvasWidth = availableCanvasWidth;
+                    canvasHeight = Math.round(availableCanvasWidth / aspectRatio);
+                }
+
+                // Set canvas dimensions
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+
+                console.log(`📐 Canvas size updated: ${canvasWidth}x${canvasHeight} for chart ${app.filteredData[index].fileName}`);
+
+                // Re-render the chart with new dimensions
+                renderChartOnCanvas(canvas, app.filteredData[index]);
+            }
+        }
+    });
+
+    // Update virtual scrolling if active
+    if (app.virtualScrolling.active) {
+        app.virtualScrolling.itemHeight = layout.actualChartHeight + layout.gap;
+    }
+
+    console.log(`📐 Layout updated: ${layout.columns} columns, ${layout.rows} rows, gap: ${layout.gap}px`);
+}
+
+function calculateOptimalLayout(containerWidth, containerHeight, chartWidth, chartHeight, totalCharts) {
+    console.log('📐 Calculating layout for container:', containerWidth, 'x', containerHeight, 'charts:', totalCharts);
+
+    // Simple, reliable layout calculation
+    const minChartWidth = 250;
+    const maxChartWidth = 400; // Smaller max width to fit more columns
+    const minChartHeight = 180;
+    const maxChartHeight = 280; // Smaller max height
+
+    let bestLayout = null;
+    let bestColumnCount = 1;
+
+    // Try different column counts (1 to 6)
+    for (let cols = 1; cols <= 6; cols++) {
+        const gap = 24; // Fixed gap for simplicity
+        const availableWidthForCharts = containerWidth - (cols - 1) * gap;
+
+        // Calculate chart width that fits
+        const chartWidthForThisCols = Math.max(minChartWidth, Math.min(maxChartWidth, Math.floor(availableWidthForCharts / cols)));
+        const chartHeightForThisCols = Math.max(minChartHeight, Math.min(maxChartHeight, Math.floor(chartWidthForThisCols * 0.7))); // Keep aspect ratio
+
+        const requiredWidth = cols * chartWidthForThisCols + (cols - 1) * gap;
+        const rows = Math.ceil(totalCharts / cols);
+        const requiredHeight = rows * chartHeightForThisCols + (rows - 1) * gap;
+
+        console.log(`🔍 Testing ${cols} columns: chart=${chartWidthForThisCols}x${chartHeightForThisCols}, required=${requiredWidth}x${requiredHeight}`);
+
+        // Check if it fits
+        if (requiredWidth <= containerWidth && requiredHeight <= containerHeight) {
+            if (cols > bestColumnCount) {
+                bestColumnCount = cols;
+                bestLayout = {
+                    columns: cols,
+                    rows: rows,
+                    actualChartWidth: chartWidthForThisCols,
+                    actualChartHeight: chartHeightForThisCols,
+                    gap: gap,
+                    utilization: (requiredWidth / containerWidth + requiredHeight / containerHeight) / 2,
+                    totalWidth: requiredWidth,
+                    totalHeight: requiredHeight
+                };
+                console.log(`✅ Found better layout: ${cols} columns`);
+            }
+        }
+    }
+
+    // Fallback to single column if nothing fits
+    if (!bestLayout) {
+        console.log('⚠️ Using fallback single column layout');
+        const fallbackWidth = Math.max(minChartWidth, Math.floor(containerWidth * 0.9));
+        const fallbackHeight = Math.max(minChartHeight, Math.floor(fallbackWidth * 0.7));
+        const gap = 24;
+        const rows = totalCharts;
+
+        bestLayout = {
+            columns: 1,
+            rows: rows,
+            actualChartWidth: fallbackWidth,
+            actualChartHeight: fallbackHeight,
+            gap: gap,
+            utilization: 0.6,
+            totalWidth: fallbackWidth,
+            totalHeight: rows * fallbackHeight + (rows - 1) * gap
+        };
+    }
+
+    console.log('🎯 Final layout selected:', {
+        columns: bestLayout.columns,
+        rows: bestLayout.rows,
+        chartSize: `${bestLayout.actualChartWidth}x${bestLayout.actualChartHeight}`,
+        gap: bestLayout.gap,
+        utilization: Math.round(bestLayout.utilization * 100) + '%'
+    });
+
+    return bestLayout;
+}
+
+function handleZoomToLevel(zoomLevel) {
+    app.viewSettings.zoom = Math.max(0.3, Math.min(2.0, zoomLevel));
+
+    // Update chart sizes
+    updateChartSizes();
     updateStatistics();
 
-    console.log('🔍 Zoom level:', app.viewSettings.zoom);
+    // Update preset button states
+    updatePresetButtonStates();
+
+    console.log('🔍 Zoom set to level:', app.viewSettings.zoom);
+}
+
+function handleFitToScreen() {
+    // Calculate optimal zoom to fit all charts on screen
+    if (elements.chartsGrid && app.filteredData.length > 0) {
+        const containerWidth = elements.chartsGrid.clientWidth;
+        const containerHeight = elements.chartsGrid.clientHeight;
+
+        // Calculate optimal columns and zoom
+        const baseChartWidth = 600;
+        const baseChartHeight = 400;
+        const minGap = 16;
+
+        // Try different column counts
+        let bestZoom = 0.3;
+        for (let cols = 1; cols <= 4; cols++) {
+            const rows = Math.ceil(app.filteredData.length / cols);
+            const requiredWidth = cols * baseChartWidth + (cols - 1) * minGap;
+            const requiredHeight = rows * baseChartHeight + (rows - 1) * minGap;
+
+            const zoomX = containerWidth / requiredWidth;
+            const zoomY = containerHeight / requiredHeight;
+            const possibleZoom = Math.min(zoomX, zoomY);
+
+            if (possibleZoom > bestZoom && possibleZoom <= 2.0) {
+                bestZoom = possibleZoom;
+            }
+        }
+
+        handleZoomToLevel(bestZoom);
+        updateStatus(`✅ 适应屏幕缩放: ${Math.round(bestZoom * 100)}%`);
+    }
+}
+
+function updatePresetButtonStates() {
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        const zoomLevel = parseFloat(btn.dataset.zoom);
+        if (Math.abs(zoomLevel - app.viewSettings.zoom) < 0.05) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
 }
 
 function reRenderCharts() {
@@ -864,6 +1174,144 @@ function reRenderCharts() {
             renderChartOnCanvas(canvas, app.filteredData[index]);
         }
     });
+}
+
+function handleLayoutChange(columns) {
+    console.log('🎛️ Layout change requested:', columns);
+
+    // Update the layout setting
+    app.viewSettings.columnsPerRow = columns;
+
+    // Update button states
+    updateLayoutButtonStates(columns);
+
+    // Re-apply layout with new column setting
+    if (app.filteredData.length > 0) {
+        applyLayoutWithColumns(columns);
+    }
+}
+
+function updateLayoutButtonStates(selectedColumns) {
+    // Update all layout button states
+    elements.layoutButtons.forEach(btn => {
+        const columns = btn.dataset.columns;
+        if (columns === selectedColumns) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
+function applyLayoutWithColumns(columns) {
+    if (!elements.chartsGrid || app.filteredData.length === 0) return;
+
+    console.log('🎨 Applying layout with columns:', columns);
+
+    // Get container dimensions
+    const containerRect = elements.chartsContainer.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
+
+    // Use current zoom level
+    const currentZoom = app.viewSettings.zoom;
+    const baseChartWidth = 400;
+    const baseChartHeight = 320;
+    const chartWidth = baseChartWidth * currentZoom;
+    const chartHeight = baseChartHeight * currentZoom;
+
+    let layout;
+
+    if (columns === 'auto') {
+        // Use automatic layout calculation
+        layout = calculateOptimalLayout(containerWidth, containerHeight, chartWidth, chartHeight, app.filteredData.length);
+        console.log('🤖 Using automatic layout:', layout);
+    } else {
+        // Use manual column setting
+        const columnCount = parseInt(columns);
+        const gap = 24;
+        const availableWidth = containerWidth - (columnCount - 1) * gap;
+        const actualChartWidth = Math.max(250, Math.min(400, Math.floor(availableWidth / columnCount)));
+        const actualChartHeight = Math.max(200, Math.floor(actualChartWidth * 0.8));
+
+        const rows = Math.ceil(app.filteredData.length / columnCount);
+
+        layout = {
+            columns: columnCount,
+            rows: rows,
+            actualChartWidth: actualChartWidth,
+            actualChartHeight: actualChartHeight,
+            gap: gap,
+            utilization: (actualChartWidth * columnCount / containerWidth + actualChartHeight * rows / containerHeight) / 2,
+            totalWidth: columnCount * actualChartWidth + (columnCount - 1) * gap,
+            totalHeight: rows * actualChartHeight + (rows - 1) * gap
+        };
+
+        console.log('🎯 Using manual layout:', layout);
+    }
+
+    // Apply the layout
+    applyGridLayout(layout);
+}
+
+function applyGridLayout(layout) {
+    // Apply CSS grid layout
+    const columnDefs = Array(layout.columns).fill(`${layout.actualChartWidth}px`).join(' ');
+
+    elements.chartsGrid.style.gridTemplateColumns = columnDefs;
+    elements.chartsGrid.style.gap = `${layout.gap}px`;
+    elements.chartsGrid.style.justifyContent = 'center';
+
+    console.log('🔧 Applying grid layout:', {
+        columns: layout.columns,
+        columnDefs: columnDefs,
+        gap: layout.gap,
+        chartSize: `${layout.actualChartWidth}x${layout.actualChartHeight}`
+    });
+
+    // Update each chart element size
+    app.chartInstances.forEach((canvas, index) => {
+        if (index < app.filteredData.length) {
+            const chartElement = canvas.closest('.chart-item');
+            const canvasContainer = canvas.closest('.chart-canvas-container');
+
+            if (chartElement) {
+                console.log(`🔧 Resizing chart ${index}: ${layout.actualChartWidth}x${layout.actualChartHeight}`);
+
+                // Apply calculated dimensions
+                chartElement.style.width = '100%';
+                chartElement.style.maxWidth = `${layout.actualChartWidth}px`;
+                chartElement.style.minWidth = `${layout.actualChartWidth}px`;
+                chartElement.style.minHeight = `${layout.actualChartHeight}px`;
+                chartElement.style.flexShrink = '0';
+
+                // Update canvas container
+                if (canvasContainer) {
+                    canvasContainer.style.minHeight = `${Math.round(layout.actualChartHeight * 0.7)}px`;
+                }
+
+                // Update canvas dimensions
+                const canvasWidth = Math.max(200, Math.round(layout.actualChartWidth - 40));
+                const canvasHeight = Math.max(150, Math.round(layout.actualChartHeight - 60));
+
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                canvas.style.width = `${canvasWidth}px`;
+                canvas.style.height = `${canvasHeight}px`;
+
+                // Re-render the chart with new dimensions
+                renderChartOnCanvas(canvas, app.filteredData[index]);
+            }
+        }
+    });
+
+    // Update statistics
+    updateLayoutStats(layout);
+
+    // Force a reflow to ensure the layout is applied
+    elements.chartsGrid.offsetHeight;
+
+    console.log('✅ Layout applied successfully');
 }
 
 function handleChartScroll() {
