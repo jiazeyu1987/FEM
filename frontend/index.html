@@ -72,6 +72,7 @@
               </div>
               <div class="batch-action-section">
                 <button type="button" id="batchAnalyzeBtn" class="batch-btn primary" disabled>批量分析</button>
+                <button type="button" id="batchDeepAnalyzeBtn" class="batch-btn primary" disabled>批量深度分析</button>
                 <div class="batch-progress" id="batchProgress" style="display: none;">
                   <div class="progress-header">
                     <span>批量分析进度</span>
@@ -81,6 +82,16 @@
                     <div class="progress-fill" id="progressFill"></div>
                   </div>
                   <div class="batch-status" id="batchStatus">准备就绪</div>
+                </div>
+                <div class="batch-progress" id="deepAnalysisProgress" style="display: none;">
+                  <div class="progress-header">
+                    <span>深度分析进度</span>
+                    <span id="deepProgressText">0%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill" id="deepProgressFill"></div>
+                  </div>
+                  <div class="batch-status" id="deepAnalysisStatus">准备就绪</div>
                 </div>
               </div>
             </div>

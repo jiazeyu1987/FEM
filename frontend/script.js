@@ -68,10 +68,15 @@
   const fileCount = document.getElementById('fileCount');
   const clearFilesBtn = document.getElementById('clearFilesBtn');
   const batchAnalyzeBtn = document.getElementById('batchAnalyzeBtn');
+  const batchDeepAnalyzeBtn = document.getElementById('batchDeepAnalyzeBtn');
   const batchProgress = document.getElementById('batchProgress');
   const progressText = document.getElementById('progressText');
   const progressFill = document.getElementById('progressFill');
   const batchStatus = document.getElementById('batchStatus');
+  const deepAnalysisProgress = document.getElementById('deepAnalysisProgress');
+  const deepProgressText = document.getElementById('deepProgressText');
+  const deepProgressFill = document.getElementById('deepProgressFill');
+  const deepAnalysisStatus = document.getElementById('deepAnalysisStatus');
   const videoSelector = document.getElementById('videoSelector');
 
   const methodsEls = document.querySelectorAll('.method');
@@ -123,6 +128,10 @@
   const batchAnalyses = new Map(); // videoId -> analysisData
   let currentVideoId = null;        // Currently displayed analysis ID
   let batchFiles = [];               // Array of selected files
+
+  // Deep analysis variables
+  const deepAnalysisResults = new Map(); // videoId -> deepAnalysisData
+  let deepAnalysisProcessing = false;    // Whether deep analysis is active
   const batchQueue = {
     videos: [],           // Array of analysisData
     processing: false,    // Whether batch processing is active
@@ -343,9 +352,11 @@
     if (batchFiles.length === 0) {
       batchFileList.style.display = 'none';
       batchAnalyzeBtn.disabled = true;
+      batchDeepAnalyzeBtn.disabled = true;
     } else {
       batchFileList.style.display = 'block';
       batchAnalyzeBtn.disabled = false;
+      batchDeepAnalyzeBtn.disabled = false;
       fileCount.textContent = batchFiles.length;
 
       // Update file list items
@@ -1513,6 +1524,262 @@ function updateFrameNavigationButtons() {
 
 
 
+// Deep analysis functions
+  async function performBatchDeepAnalysis() {
+    if (batchFiles.length === 0) {
+      alert('请先加载视频文件');
+      return;
+    }
+
+    // Check if ROI is set (use current video's ROI or default)
+    if (!roi) {
+      if (!confirm('尚未设置ROI，是否使用默认的中心50%区域进行深度分析？')) {
+        return;
+      }
+      // Set default ROI if not confirmed
+      roi = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    }
+
+    deepAnalysisResults.clear();
+    deepAnalysisProcessing = true;
+
+    // Show deep analysis progress
+    showDeepAnalysisProgress(true, 0, '开始深度分析...');
+
+    try {
+      for (let i = 0; i < batchFiles.length; i++) {
+        if (!deepAnalysisProcessing) break; // Check if cancelled
+
+        const file = batchFiles[i];
+        const progress = ((i + 1) / batchFiles.length * 100).toFixed(0);
+        showDeepAnalysisProgress(true, progress, `正在分析 ${i + 1}/${batchFiles.length}: ${file.name}`);
+
+        try {
+          // Deep analyze single video
+          const deepResult = await deepAnalyzeSingleVideo(file);
+          if (deepResult) {
+            deepAnalysisResults.set(deepResult.videoId, deepResult);
+            console.log(`深度分析完成 ${file.name}, 结果数量: ${deepAnalysisResults.size}`);
+          }
+        } catch (error) {
+          console.error(`深度分析失败 ${file.name}:`, error);
+          showDeepAnalysisProgress(true, progress, `分析失败 ${file.name}: ${error.message}`);
+        }
+      }
+
+      if (deepAnalysisProcessing) {
+        showDeepAnalysisProgress(true, 100, '深度分析完成，准备导出CSV...');
+        setTimeout(() => {
+          exportDeepAnalysisToCSV();
+          showDeepAnalysisProgress(false);
+        }, 1000);
+      }
+
+    } catch (error) {
+      console.error('批量深度分析失败:', error);
+      alert('批量深度分析失败: ' + error.message);
+    } finally {
+      deepAnalysisProcessing = false;
+    }
+  }
+
+  async function deepAnalyzeSingleVideo(file) {
+    const videoId = file.name + '_' + file.size;
+
+    try {
+      // Use current ROI or default ROI for analysis
+      const analysisRoi = roi || { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+
+      // Prepare form data for backend analysis
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('roi_x', String(analysisRoi.x));
+      formData.append('roi_y', String(analysisRoi.y));
+      formData.append('roi_w', String(analysisRoi.w));
+      formData.append('roi_h', String(analysisRoi.h));
+      formData.append('sample_fps', String(Number(sampleFpsEl?.value || 8)));
+      formData.append('methods', 'sudden,threshold,relative');
+
+      // Add parameters
+      Object.entries(p).forEach(([key, el]) => {
+        if (el && el.value !== '') formData.append(key, String(el.value));
+      });
+
+      // Send to backend for analysis
+      const response = await fetch('http://localhost:8421/analyze', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const analysisResult = await response.json();
+
+      if (!analysisResult || !analysisResult.series || analysisResult.series.length === 0) {
+        throw new Error('分析结果无效');
+      }
+
+      // Temporarily store analysis data for interval finding
+      const originalAnalyzedXs = analyzedXs;
+      const originalAnalyzedSeries = analyzedSeries;
+      const originalShadedIntervals = shadedIntervals;
+      const originalAnalyzedBaseline = analyzedBaseline;
+
+      analyzedXs = analysisResult.series.map(p => p.t);
+      analyzedSeries = analysisResult.series;
+      analyzedBaseline = analysisResult.baseline || 0;
+
+      // Recompute shaded intervals based on the analysis
+      recomputeShadedIntervals();
+
+      // Find the first shaded interval (from time 0)
+      const firstInterval = findNextShadedInterval(0);
+
+      let deepStats = null;
+
+      if (firstInterval) {
+        // Calculate statistics for this interval
+        const statistics = calculateIntervalStatistics(firstInterval);
+
+        if (statistics) {
+          deepStats = {
+            videoName: file.name,
+            videoId: videoId,
+            file: file,
+            interval: firstInterval,
+            statistics: {
+              blue: {
+                avg: statistics.blue.avg,
+                max: statistics.blue.max,
+                min: statistics.blue.min
+              },
+              yellow: {
+                avg: statistics.yellow.avg,
+                max: statistics.yellow.max,
+                min: statistics.yellow.min
+              },
+              white: {
+                avg: statistics.white.avg,
+                max: statistics.white.max,
+                min: statistics.white.min
+              }
+            }
+          };
+          console.log(`成功找到区间并计算统计: ${file.name}, 区间: [${firstInterval.start.toFixed(2)}, ${firstInterval.end.toFixed(2)}]`);
+        }
+      } else {
+        // No interval found - still return basic info
+        deepStats = {
+          videoName: file.name,
+          videoId: videoId,
+          file: file,
+          interval: null,
+          statistics: null
+        };
+        console.log(`未找到着色区间: ${file.name}`);
+      }
+
+      // Restore original analysis data
+      analyzedXs = originalAnalyzedXs;
+      analyzedSeries = originalAnalyzedSeries;
+      shadedIntervals = originalShadedIntervals;
+      analyzedBaseline = originalAnalyzedBaseline;
+
+      return deepStats;
+
+    } catch (error) {
+      console.error('深度分析单个视频失败:', error);
+      throw error;
+    }
+  }
+
+  function exportDeepAnalysisToCSV() {
+    console.log(`开始导出深度分析，结果数量: ${deepAnalysisResults.size}`);
+
+    if (deepAnalysisResults.size === 0) {
+      alert('没有深度分析数据可导出');
+      return;
+    }
+
+    // Create CSV content
+    let csvContent = '文件名,区间开始时间,区间结束时间,蓝_平均值,蓝_最大值,蓝_最小值,黄_平均值,黄_最大值,黄_最小值,白_平均值,白_最大值,白_最小值\n';
+
+    const results = Array.from(deepAnalysisResults.values());
+    console.log(`准备导出 ${results.length} 个结果:`, results.map(r => r.videoName));
+
+    let exportedCount = 0;
+    results.forEach(result => {
+      if (result.interval && result.statistics) {
+        const row = [
+          result.videoName,
+          result.interval.start.toFixed(3),
+          result.interval.end.toFixed(3),
+          result.statistics.blue.avg.toFixed(3),
+          result.statistics.blue.max.toFixed(3),
+          result.statistics.blue.min.toFixed(3),
+          result.statistics.yellow.avg.toFixed(3),
+          result.statistics.yellow.max.toFixed(3),
+          result.statistics.yellow.min.toFixed(3),
+          result.statistics.white.avg.toFixed(1),
+          result.statistics.white.max.toFixed(1),
+          result.statistics.white.min.toFixed(1)
+        ];
+        csvContent += row.join(',') + '\n';
+        exportedCount++;
+      } else {
+        // Handle files without valid intervals
+        console.log(`跳过无效结果: ${result.videoName}`);
+        const row = [
+          result.videoName,
+          '无区间',
+          '无区间',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A',
+          'N/A'
+        ];
+        csvContent += row.join(',') + '\n';
+        exportedCount++;
+      }
+    });
+
+    console.log(`实际导出 ${exportedCount} 条记录`);
+
+    // Create and download CSV file
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `深度分析结果_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    alert(`深度分析完成！已导出 ${exportedCount} 个文件的分析结果到CSV文件（包含${results.length - exportedCount}个无区间文件）。`);
+  }
+
+  function showDeepAnalysisProgress(show, percentage = 0, status = '准备就绪') {
+    if (!deepAnalysisProgress) return;
+
+    if (show) {
+      deepAnalysisProgress.style.display = 'block';
+      if (deepProgressText) deepProgressText.textContent = percentage + '%';
+      if (deepProgressFill) deepProgressFill.style.width = percentage + '%';
+      if (deepAnalysisStatus) deepAnalysisStatus.textContent = status;
+    } else {
+      deepAnalysisProgress.style.display = 'none';
+    }
+  }
+
 // Batch processing queue engine
   async function processBatchQueue() {
     if (batchFiles.length === 0) {
@@ -1699,6 +1966,19 @@ function updateFrameNavigationButtons() {
         }
       } else {
         processBatchQueue();
+      }
+    });
+  }
+
+  if (batchDeepAnalyzeBtn) {
+    batchDeepAnalyzeBtn.addEventListener('click', () => {
+      if (deepAnalysisProcessing) {
+        if (confirm('深度分析正在进行中，确定要取消吗？')) {
+          deepAnalysisProcessing = false;
+          showDeepAnalysisProgress(false);
+        }
+      } else {
+        performBatchDeepAnalysis();
       }
     });
   }
