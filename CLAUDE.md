@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**HEM Analyzer** is a medical diagnostic tool for detecting High-Intensity Focused Ultrasound (HIFU) treatment过程中的气体栓塞（HEM）事件. This is a full-stack web application with a VS Code-themed UI for video upload and ROI selection, backed by FastAPI + OpenCV for video analysis.
+**HEM Analyzer** is a medical diagnostic tool for detecting gas emboli (HEM) events during High-Intensity Focused Ultrasound (HIFU) treatment. This is a full-stack web application with a VS Code-themed UI for video upload and ROI selection, backed by FastAPI + OpenCV for video analysis.
 
 ## Architecture
 
@@ -91,6 +91,8 @@ docker run -p 8421:8421 hem-analyzer
   - Blue (Δv): Current frame ROI mean - historical mean
   - Yellow (d(Δv)): First-order derivative of blue curve
   - White: ROI average grayscale value
+  - Pink: ROI standard deviation
+  - Purple: High gray value ratio (>130)
 - **Timeline Navigation**: Interactive timeline with zoom/pan and click-to-scrub
 - **Information Panel**: Shows curve values at clicked timestamps
 - **Batch Processing**: Multi-video analysis with progress tracking
