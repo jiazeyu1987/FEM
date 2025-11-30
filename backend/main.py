@@ -47,12 +47,15 @@ def compute_series(
     sample_fps: float,
     ref_mode: str = "global",
     high_threshold: int = 130,
+    conditional_threshold1: int = 120,
+    conditional_threshold2: int = 160,
 ):
     series_t: List[float] = []
     roi_mean: List[float] = []
     ref_mean: List[float] = []
     roi_std: List[float] = []
     roi_high_ratio: List[float] = []
+    roi_conditional_ratio: List[float] = []
 
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -80,6 +83,23 @@ def compute_series(
         else:
             roi_high_ratio_val = float("nan")
 
+        # Calculate conditional high gray value ratio
+        # When average pixel value > threshold1, calculate percentage of pixels > threshold2
+        if roi_patch.size > 0 and roi_val > conditional_threshold1:
+            pixels_above_threshold2 = np.sum(roi_patch > conditional_threshold2)
+            roi_conditional_ratio_val = float(pixels_above_threshold2 / roi_patch.size * 100)
+            # Debug: Log orange curve calculation (only for first few points to avoid spam)
+            if len(series_t) < 5:
+                print(f"🟠 Orange curve calculation (frame {len(series_t)}):")
+                print(f"  - ROI avg value: {roi_val:.2f} > threshold1: {conditional_threshold1}")
+                print(f"  - Pixels > threshold2: {pixels_above_threshold2} / {roi_patch.size} = {roi_conditional_ratio_val:.2f}%")
+        else:
+            roi_conditional_ratio_val = 0.0
+            # Debug: Log skipped calculation (only for first few points)
+            if len(series_t) < 5:
+                print(f"🟠 Orange curve skipped (frame {len(series_t)}):")
+                print(f"  - ROI avg value: {roi_val:.2f} <= threshold1: {conditional_threshold1}")
+
         if ref_mode == "global":
             ref_val = float(np.mean(gray))
         else:
@@ -91,8 +111,9 @@ def compute_series(
         ref_mean.append(ref_val)
         roi_std.append(roi_std_val)
         roi_high_ratio.append(roi_high_ratio_val)
+        roi_conditional_ratio.append(roi_conditional_ratio_val)
 
-    return series_t, roi_mean, ref_mean, roi_std, roi_high_ratio
+    return series_t, roi_mean, ref_mean, roi_std, roi_high_ratio, roi_conditional_ratio
 
 
 def moving_average(x: np.ndarray, k: int = 3) -> np.ndarray:
@@ -184,8 +205,19 @@ async def analyze(
     threshold_hold: Optional[int] = Form(None),
     relative_delta: Optional[float] = Form(None),
     high_threshold: Optional[int] = Form(130),
+    conditional_threshold1: Optional[int] = Form(120),
+    conditional_threshold2: Optional[int] = Form(160),
 ):
     try:
+        # Debug logging for received parameters
+        print(f"📊 Analysis request received:")
+        print(f"  - ROI: x={roi_x}, y={roi_y}, w={roi_w}, h={roi_h}")
+        print(f"  - Sample FPS: {sample_fps}")
+        print(f"  - Methods: {methods}")
+        print(f"  - High threshold: {high_threshold}")
+        print(f"  - Conditional threshold1: {conditional_threshold1}")
+        print(f"  - Conditional threshold2: {conditional_threshold2}")
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             with tempfile.TemporaryFile() as sink:
                 # stream to temp file
@@ -201,7 +233,12 @@ async def analyze(
             return JSONResponse(status_code=400, content={"error": "Cannot open video"})
 
         roi = {"x": roi_x, "y": roi_y, "w": roi_w, "h": roi_h}
-        t, roi_m, ref_m, roi_s, roi_h = compute_series(cap, roi, sample_fps, ref_mode="global", high_threshold=high_threshold or 130)
+        t, roi_m, ref_m, roi_s, roi_h, roi_c = compute_series(
+            cap, roi, sample_fps, ref_mode="global",
+            high_threshold=high_threshold or 130,
+            conditional_threshold1=conditional_threshold1 or 120,
+            conditional_threshold2=conditional_threshold2 or 160
+        )
         cap.release()
 
         params: Dict[str, Any] = {}
@@ -222,7 +259,7 @@ async def analyze(
         )
 
         # Prepare compact series for plotting
-        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf), "std": float(rs), "high": float(rh)} for tt, rm, rf, rs, rh in zip(t, roi_m, ref_m, roi_s, roi_h)]
+        series = [{"t": float(tt), "roi": float(rm), "ref": float(rf), "std": float(rs), "high": float(rh), "orange": float(rc)} for tt, rm, rf, rs, rh, rc in zip(t, roi_m, ref_m, roi_s, roi_h, roi_c)]
 
         return {
             "has_hem": has_hem,
