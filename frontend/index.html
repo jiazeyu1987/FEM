@@ -117,6 +117,7 @@
                         <label><input type="checkbox" id="batchShowYellow" checked> 黄曲线</label>
                         <label><input type="checkbox" id="batchShowPink" checked> 粉曲线</label>
                         <label><input type="checkbox" id="batchShowPurple" checked> 紫曲线</label>
+                        <label><input type="checkbox" id="batchShowOrange" checked> 橙曲线</label>
                       </div>
                       <button type="button" id="clearBatchChartsBtn" class="batch-btn secondary" style="font-size: 11px; padding: 4px 8px;">清除图表</button>
                     </div>
@@ -161,6 +162,10 @@
                 <div class="curve-value">
                   <span class="curve-label purple">紫:</span>
                   <span id="infoPurpleValue" class="curve-number">--</span>
+                </div>
+                <div class="curve-value">
+                  <span class="curve-label orange">橙:</span>
+                  <span id="infoOrangeValue" class="curve-number">--</span>
                 </div>
               </div>
               <div class="info-status">
@@ -249,6 +254,16 @@
                         <span class="stat-item">平均: <span id="purpleStatAvg" class="stat-number">--</span></span>
                       </div>
                     </div>
+                    <div class="curve-statistics">
+                      <div class="curve-stats-header">
+                        <span class="curve-stat-label orange">橙曲线</span>
+                      </div>
+                      <div class="curve-stats-values">
+                        <span class="stat-item">最小: <span id="orangeStatMin" class="stat-number">--</span></span>
+                        <span class="stat-item">最大: <span id="orangeStatMax" class="stat-number">--</span></span>
+                        <span class="stat-item">平均: <span id="orangeStatAvg" class="stat-number">--</span></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -293,6 +308,7 @@
             <label><input type="checkbox" id="showWhiteRoi" checked> White ROI Avg</label>
             <label><input type="checkbox" id="showPinkStd" checked> Pink ROI Std</label>
             <label><input type="checkbox" id="showPurpleHigh" checked> Purple High Ratio</label>
+            <label><input type="checkbox" id="showOrange" checked> Orange Conditional Ratio</label>
           </div>
           <div class="judge">
             <label style="display:flex;flex-direction:column;font-size:12px;color:#cbd5e1">
@@ -307,6 +323,20 @@
               <input id="p_high_threshold" type="number" min="0" max="255" step="1" value="130" style="margin-top:4px">
             </label>
             <div class="threshold-info" style="font-size:10px;color:#9ca3af;margin-top:2px">高灰度像素检测阈值 (0-255)</div>
+          </div>
+          <div class="judge">
+            <label style="display:flex;flex-direction:column;font-size:12px;color:#cbd5e1">
+              Orange Threshold 1
+              <input id="conditional_threshold1" type="number" min="0" max="255" step="1" value="120" style="margin-top:4px">
+            </label>
+            <div class="threshold-info" style="font-size:10px;color:#9ca3af;margin-top:2px">平均像素值阈值 (0-255)</div>
+          </div>
+          <div class="judge">
+            <label style="display:flex;flex-direction:column;font-size:12px;color:#cbd5e1">
+              Orange Threshold 2
+              <input id="conditional_threshold2" type="number" min="0" max="255" step="1" value="160" style="margin-top:4px">
+            </label>
+            <div class="threshold-info" style="font-size:10px;color:#9ca3af;margin-top:2px">条件像素值阈值 (0-255)</div>
           </div>
           <div class="chart-area">
             <canvas id="chart" height="200"></canvas>

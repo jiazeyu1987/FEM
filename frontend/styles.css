@@ -68,6 +68,7 @@ tbody tr:hover{background:#0b1220}
 .curve-label.white{background:#ffffff;color:#000}
 .curve-label.pink{background:#f9a8d4;color:#000}
 .curve-label.purple{background:#a855f7;color:#fff}
+.curve-label.orange{background:#fb923c;color:#000}
 .curve-number{font-family:monospace;font-weight:600;color:#cbd5e1;min-width:60px;text-align:right}
 .info-status{margin-bottom:8px}
 .status-text{font-size:11px;color:var(--muted);font-style:italic}

@@ -17,6 +17,7 @@
   const showWhiteRoiEl = document.getElementById('showWhiteRoi');
   const showPinkStdEl = document.getElementById('showPinkStd');
   const showPurpleHighEl = document.getElementById('showPurpleHigh');
+  const showOrangeEl = document.getElementById('showOrange');
   const sampleFpsEl = document.getElementById('sampleFps');
 
   // Information panel elements
@@ -26,6 +27,7 @@
   const infoWhiteValueEl = document.getElementById('infoWhiteValue');
   const infoPinkValueEl = document.getElementById('infoPinkValue');
   const infoPurpleValueEl = document.getElementById('infoPurpleValue');
+  const infoOrangeValueEl = document.getElementById('infoOrangeValue');
   const infoStatusEl = document.getElementById('infoStatus');
   const clearInfoBtn = document.getElementById('clearInfoBtn');
 
@@ -58,6 +60,9 @@
   const purpleStatMin = document.getElementById('purpleStatMin');
   const purpleStatMax = document.getElementById('purpleStatMax');
   const purpleStatAvg = document.getElementById('purpleStatAvg');
+  const orangeStatMin = document.getElementById('orangeStatMin');
+  const orangeStatMax = document.getElementById('orangeStatMax');
+  const orangeStatAvg = document.getElementById('orangeStatAvg');
 
   // Batch analysis elements
   const batchFileInput = document.getElementById('batchFileInput');
@@ -96,6 +101,7 @@
   const batchShowYellow = document.getElementById('batchShowYellow');
   const batchShowPink = document.getElementById('batchShowPink');
   const batchShowPurple = document.getElementById('batchShowPurple');
+  const batchShowOrange = document.getElementById('batchShowOrange');
 
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
@@ -109,6 +115,8 @@
     threshold_hold: document.getElementById('p_threshold_hold'),
     relative_delta: document.getElementById('p_relative_delta'),
     high_threshold: document.getElementById('p_high_threshold'),
+    conditional_threshold1: document.getElementById('conditional_threshold1'),
+    conditional_threshold2: document.getElementById('conditional_threshold2'),
     // timeline shading thresholds (frontend-only)
     rise_thresh: document.getElementById('p_rise_thresh'),
     fall_thresh: document.getElementById('p_fall_thresh'),
@@ -137,7 +145,7 @@
   let roiCenter = null; // center point coordinates {x, y}
   let roiDimensions = {w: 100, h: 200}; // pixel dimensions
   let placingCenter = false;
-  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), showPinkStd: (showPinkStdEl? showPinkStdEl.checked : true), showPurpleHigh: (showPurpleHighEl? showPurpleHighEl.checked : true), yZoom: 1, padLeft: 56 };
+  const chartState = { showBlue: (showBlueEl? showBlueEl.checked : true), showYellow: (showYellowEl? showYellowEl.checked : true), showWhiteRoi: (showWhiteRoiEl? showWhiteRoiEl.checked : true), showPinkStd: (showPinkStdEl? showPinkStdEl.checked : true), showPurpleHigh: (showPurpleHighEl? showPurpleHighEl.checked : true), showOrange: (showOrangeEl? showOrangeEl.checked : true), yZoom: 1, padLeft: 56 };
 
   // Initialize frame navigation buttons to always enabled state
   updateFrameNavigationButtons();
@@ -159,7 +167,8 @@
     showBlue: true,
     showYellow: true,
     showPink: true,
-    showPurple: true
+    showPurple: true,
+    showOrange: true
   };
   let batchScrolling = {
     active: false,
@@ -546,7 +555,34 @@
       fd.append('sample_fps', String(Number(sampleFpsEl.value || 8)));
       fd.append('methods', selectedMethods());
       // attach parameters (optional)
-      Object.entries(p).forEach(([key, el])=>{ if (el && el.value !== '') fd.append(key, String(el.value)); });
+      Object.entries(p).forEach(([key, el])=>{
+        if (el) {
+          let value = el.value;
+          // Ensure default values for critical parameters
+          if (key === 'conditional_threshold1' && (value === '' || value === undefined)) {
+            value = '120';
+          }
+          if (key === 'conditional_threshold2' && (value === '' || value === undefined)) {
+            value = '160';
+          }
+          if (key === 'high_threshold' && (value === '' || value === undefined)) {
+            value = '130';
+          }
+          fd.append(key, String(value));
+        }
+      });
+
+      // Debug: Log parameters being sent
+      console.log('📤 Sending analysis parameters:');
+      Object.entries(p).forEach(([key, el]) => {
+        if (el) {
+          let value = el.value;
+          if (key === 'conditional_threshold1' && (value === '' || value === undefined)) value = '120';
+          if (key === 'conditional_threshold2' && (value === '' || value === undefined)) value = '160';
+          if (key === 'high_threshold' && (value === '' || value === undefined)) value = '130';
+          console.log(`  - ${key}: ${value}`);
+        }
+      });
 
       const resp = await fetch('http://localhost:8421/analyze', { method:'POST', body: fd });
       if (!resp.ok){ throw new Error('后端分析失败'); }
@@ -669,7 +705,8 @@ function calculateIntervalStatistics(interval) {
   const intervalData = {
     white: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.roi),
     pink: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.std || 0),
-    purple: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.high || 0)
+    purple: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.high || 0),
+    orange: analyzedSeries.slice(startIndex, endIndex + 1).map(p => p.orange || 0)
   };
 
   // Calculate blue curve (d1) values
@@ -709,7 +746,8 @@ function calculateIntervalStatistics(interval) {
     yellow: calculateStats(intervalData.yellow),
     white: calculateStats(intervalData.white),
     pink: calculateStats(intervalData.pink),
-    purple: calculateStats(intervalData.purple)
+    purple: calculateStats(intervalData.purple),
+    orange: calculateStats(intervalData.orange)
   };
 }
 
@@ -753,6 +791,11 @@ function updateNextIntervalInfo(currentTime) {
       purpleStatMax.textContent = statistics.purple.max.toFixed(1);
       purpleStatAvg.textContent = statistics.purple.avg.toFixed(1);
 
+      // Orange curve statistics
+      orangeStatMin.textContent = statistics.orange.min.toFixed(1);
+      orangeStatMax.textContent = statistics.orange.max.toFixed(1);
+      orangeStatAvg.textContent = statistics.orange.avg.toFixed(1);
+
       // Show statistics section
       intervalStatistics.style.display = 'block';
     } else {
@@ -784,6 +827,9 @@ function updateNextIntervalInfo(currentTime) {
     purpleStatMin.textContent = '--';
     purpleStatMax.textContent = '--';
     purpleStatAvg.textContent = '--';
+    orangeStatMin.textContent = '--';
+    orangeStatMax.textContent = '--';
+    orangeStatAvg.textContent = '--';
 
     // Hide statistics section
     intervalStatistics.style.display = 'none';
@@ -1214,6 +1260,8 @@ function updateFrameNavigationButtons() {
     const stdSeries = series.map(p=>p.std);
     // 紫线：ROI内高灰度像素占比
     const highSeries = series.map(p=>p.high);
+    // 橙线：条件像素占比（当平均像素值 > 阈值1时，ROI内超过阈值2的像素数占ROI总像素数的比例）
+    const orangeSeries = series.map(p=>p.orange || 0);
 
     // window sync to timeline
     let minX = xs[0], maxX = xs[xs.length-1];
@@ -1231,6 +1279,7 @@ function updateFrameNavigationButtons() {
     if (chartState.showWhiteRoi) parts.push(inView(v).length? inView(v):v);
     if (chartState.showPinkStd) parts.push(inView(stdSeries).length? inView(stdSeries):stdSeries);
     if (chartState.showPurpleHigh) parts.push(inView(highSeries).length? inView(highSeries):highSeries);
+    if (chartState.showOrange) parts.push(inView(orangeSeries).length? inView(orangeSeries):orangeSeries);
     if (!parts.length){
       // nothing selected, just draw axis baseline
       const padLeft = 56, padRight = 10, padTop = 16, padBottom = 22;
@@ -1305,6 +1354,18 @@ function updateFrameNavigationButtons() {
       });
       ctx.stroke();
     }
+    if (chartState.showOrange){
+      ctx.strokeStyle = '#fb923c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      xs.forEach((t,i)=>{
+        if (t<minX || t>maxX) return;
+        const x=x2px(t), y=y2px(orangeSeries[i]);
+        const prev=i>0 && xs[i-1]>=minX;
+        (prev?ctx.lineTo(x,y):ctx.moveTo(x,y));
+      });
+      ctx.stroke();
+    }
 
     // labels for meaning
     let tx = padLeft + 4; let ty = padTop - 2; ty = Math.max(14, ty);
@@ -1314,6 +1375,7 @@ function updateFrameNavigationButtons() {
     if (chartState.showWhiteRoi){ ctx.fillStyle = '#ffffff'; ctx.fillText('白: ROI平均灰度值  X=时间(s)  Y=灰度', tx, 42); }
     if (chartState.showPinkStd){ ctx.fillStyle = '#f9a8d4'; ctx.fillText('粉: ROI内像素标准差  X=时间(s)  Y=标准差', tx, 56); }
     if (chartState.showPurpleHigh){ ctx.fillStyle = '#a855f7'; ctx.fillText('紫: ROI内高灰度像素占比  X=时间(s)  Y=百分比', tx, 70); }
+    if (chartState.showOrange){ ctx.fillStyle = '#fb923c'; ctx.fillText('橙: 条件像素占比  X=时间(s)  Y=百分比', tx, 84); }
 
     // current time line
     if (!isNaN(video.currentTime)){
@@ -1327,7 +1389,7 @@ function updateFrameNavigationButtons() {
   // Information panel functions
   function interpolateCurveValues(timestamp) {
     if (!analyzedXs.length || !analyzedSeries.length) {
-      return { timestamp, blue: null, yellow: null, white: null, pink: null, purple: null, status: '无分析数据' };
+      return { timestamp, blue: null, yellow: null, white: null, pink: null, purple: null, orange: null, status: '无分析数据' };
     }
 
     // Find the closest indices in analyzedXs array
@@ -1360,6 +1422,8 @@ function updateFrameNavigationButtons() {
     const rightPink = rightData.std;
     const leftPurple = leftData.high;
     const rightPurple = rightData.high;
+    const leftOrange = leftData.orange || 0;
+    const rightOrange = rightData.orange || 0;
 
     // Recalculate blue and yellow values for this specific data
     const v = analyzedSeries.map(p => p.roi);
@@ -1381,7 +1445,7 @@ function updateFrameNavigationButtons() {
     const rightYellow = d2[rightIdx];
 
     // Perform linear interpolation
-    let blue, yellow, white, pink, purple, status;
+    let blue, yellow, white, pink, purple, orange, status;
 
     if (Math.abs(rightTime - leftTime) < 1e-6) {
       // Exact match or very close points
@@ -1390,6 +1454,7 @@ function updateFrameNavigationButtons() {
       white = leftWhite;
       pink = leftPink;
       purple = leftPurple;
+      orange = leftOrange;
       status = '精确值';
     } else if (timestamp <= analyzedXs[0]) {
       // Before first data point - use first value
@@ -1398,6 +1463,7 @@ function updateFrameNavigationButtons() {
       white = v[0];
       pink = std[0];
       purple = high[0];
+      orange = (series[0] && series[0].orange) || 0;
       status = '外推值(前)';
     } else if (timestamp >= analyzedXs[analyzedXs.length - 1]) {
       // After last data point - use last value
@@ -1406,6 +1472,7 @@ function updateFrameNavigationButtons() {
       white = v[v.length - 1];
       pink = std[std.length - 1];
       purple = high[high.length - 1];
+      orange = (series[series.length - 1] && series[series.length - 1].orange) || 0;
       status = '外推值(后)';
     } else {
       // Linear interpolation between points
@@ -1415,14 +1482,15 @@ function updateFrameNavigationButtons() {
       white = leftWhite + (rightWhite - leftWhite) * ratio;
       pink = leftPink + (rightPink - leftPink) * ratio;
       purple = leftPurple + (rightPurple - leftPurple) * ratio;
+      orange = leftOrange + (rightOrange - leftOrange) * ratio;
       status = '插值';
     }
 
-    return { timestamp, blue, yellow, white, pink, purple, status };
+    return { timestamp, blue, yellow, white, pink, purple, orange, status };
   }
 
   function updateInfoPanel(timestamp, values) {
-    if (!infoTimestampEl || !infoBlueValueEl || !infoYellowValueEl || !infoWhiteValueEl || !infoPinkValueEl || !infoPurpleValueEl || !infoStatusEl) return;
+    if (!infoTimestampEl || !infoBlueValueEl || !infoYellowValueEl || !infoWhiteValueEl || !infoPinkValueEl || !infoPurpleValueEl || !infoOrangeValueEl || !infoStatusEl) return;
 
     // Update timestamp display
     infoTimestampEl.textContent = timestamp.toFixed(3) + 's';
@@ -1433,6 +1501,7 @@ function updateFrameNavigationButtons() {
     infoWhiteValueEl.textContent = values.white !== null ? values.white.toFixed(1) : '--';
     infoPinkValueEl.textContent = values.pink !== null ? values.pink.toFixed(3) : '--';
     infoPurpleValueEl.textContent = values.purple !== null ? values.purple.toFixed(1) : '--';
+    infoOrangeValueEl.textContent = values.orange !== null ? values.orange.toFixed(1) : '--';
 
     // Update status
     infoStatusEl.textContent = values.status || '就绪';
@@ -1471,6 +1540,7 @@ function updateFrameNavigationButtons() {
     chartState.showWhiteRoi = showWhiteRoiEl ? showWhiteRoiEl.checked : true;
     chartState.showPinkStd = showPinkStdEl ? showPinkStdEl.checked : true;
     chartState.showPurpleHigh = showPurpleHighEl ? showPurpleHighEl.checked : true;
+    chartState.showOrange = showOrangeEl ? showOrangeEl.checked : true;
     rerenderAll();
   }
   if (showBlueEl) {
@@ -1487,6 +1557,9 @@ function updateFrameNavigationButtons() {
   }
   if (showPurpleHighEl) {
     showPurpleHighEl.addEventListener('change', syncToggles);
+  }
+  if (showOrangeEl) {
+    showOrangeEl.addEventListener('change', syncToggles);
   }
 
   // Clear information panel button
@@ -1639,7 +1712,21 @@ function updateFrameNavigationButtons() {
 
       // Add parameters
       Object.entries(p).forEach(([key, el]) => {
-        if (el && el.value !== '') formData.append(key, String(el.value));
+        if (el) {
+          let value = el.value;
+          // Ensure default values for critical parameters
+          if (key === 'conditional_threshold1' && (value === '' || value === undefined)) value = '120';
+          if (key === 'conditional_threshold2' && (value === '' || value === undefined)) value = '160';
+          if (key === 'high_threshold' && (value === '' || value === undefined)) value = '130';
+          formData.append(key, String(value));
+        }
+      });
+
+      // Debug: Log deep analysis parameters
+      console.log('📤 Sending deep analysis parameters:', {
+        conditional_threshold1: p.conditional_threshold1?.value || '120',
+        conditional_threshold2: p.conditional_threshold2?.value || '160',
+        high_threshold: p.high_threshold?.value || '130'
       });
 
       // Send to backend for analysis
@@ -1876,8 +1963,16 @@ function updateFrameNavigationButtons() {
               blue: curveData.blue.length,
               yellow: curveData.yellow.length,
               pink: curveData.pink.length,
-              purple: curveData.purple.length
+              purple: curveData.purple.length,
+              orange: curveData.orange.length
             });
+
+            // Debug: Check if backend returned orange data
+            const hasOrangeData = batchAnalysis.results.series.some(p => p.orange !== undefined);
+            console.log(`🔍 检查后端数据是否包含橙色曲线: ${hasOrangeData}`);
+            if (batchAnalysis.results.series.length > 0) {
+              console.log('🔍 第一个数据点的结构:', batchAnalysis.results.series[0]);
+            }
 
             curveDataArray.push({
               fileName: deepResult.videoName,
@@ -1910,7 +2005,8 @@ function updateFrameNavigationButtons() {
               blue: curveData.blue.length,
               yellow: curveData.yellow.length,
               pink: curveData.pink.length,
-              purple: curveData.purple.length
+              purple: curveData.purple.length,
+              orange: curveData.orange.length
             });
 
             curveDataArray.push({
@@ -1955,7 +2051,14 @@ function updateFrameNavigationButtons() {
 
     if (!series || series.length === 0) {
       console.warn('⚠️ 没有有效的series数据');
-      return { time: [], white: [], blue: [], yellow: [], pink: [], purple: [] };
+      return { time: [], white: [], blue: [], yellow: [], pink: [], purple: [], orange: [] };
+    }
+
+    // Debug: Check if any data points have orange property
+    const pointsWithOrange = series.filter(p => p.orange !== undefined);
+    console.log(`🔍 包含橙色数据的数据点数量: ${pointsWithOrange.length} / ${series.length}`);
+    if (pointsWithOrange.length > 0) {
+      console.log('🔍 橙色数据样本:', pointsWithOrange.slice(0, 3).map(p => p.orange));
     }
 
     const time = series.map(p => p.t);
@@ -1984,6 +2087,7 @@ function updateFrameNavigationButtons() {
 
     const pink = series.map(p => p.std || 0);
     const purple = series.map(p => p.high || 0);
+    const orange = series.map(p => p.orange || 0);
 
     console.log('✅ extractCurveData 成功提取曲线:', {
       timeLength: time.length,
@@ -1992,17 +2096,19 @@ function updateFrameNavigationButtons() {
       yellowLength: yellow.length,
       pinkLength: pink.length,
       purpleLength: purple.length,
+      orangeLength: orange.length,
       sampleValues: {
         time: time.slice(0, 3),
         white: white.slice(0, 3),
         blue: blue.slice(0, 3),
         yellow: yellow.slice(0, 3),
         pink: pink.slice(0, 3),
-        purple: purple.slice(0, 3)
+        purple: purple.slice(0, 3),
+        orange: orange.slice(0, 3)
       }
     });
 
-    return { time, white, blue, yellow, pink, purple };
+    return { time, white, blue, yellow, pink, purple, orange };
   }
 
   // Export curve data to JSON format
@@ -2028,7 +2134,7 @@ function updateFrameNavigationButtons() {
 
   // Export curve data to CSV format (flattened)
   function exportCurveDataCSV(curveDataArray) {
-    let csvContent = '文件名,视频ID,时长(s),采样率,时间点(s),白曲线,蓝曲线,黄曲线,粉曲线,紫曲线\n';
+    let csvContent = '文件名,视频ID,时长(s),采样率,时间点(s),白曲线,蓝曲线,黄曲线,粉曲线,紫曲线,橙曲线\n';
 
     curveDataArray.forEach(video => {
       const maxPoints = video.curves.time.length;
@@ -2043,7 +2149,8 @@ function updateFrameNavigationButtons() {
           video.curves.blue[i].toFixed(3),
           video.curves.yellow[i].toFixed(3),
           video.curves.pink[i].toFixed(3),
-          video.curves.purple[i].toFixed(1)
+          video.curves.purple[i].toFixed(1),
+          video.curves.orange[i].toFixed(1)
         ].join(',') + '\n';
       }
     });
@@ -2251,7 +2358,8 @@ function updateFrameNavigationButtons() {
       { data: curves.blue, color: '#4fc3f7', label: 'blue' },
       { data: curves.yellow, color: '#fbbf24', label: 'yellow' },
       { data: curves.pink, color: '#f9a8d4', label: 'pink' },
-      { data: curves.purple, color: '#a855f7', label: 'purple' }
+      { data: curves.purple, color: '#a855f7', label: 'purple' },
+      { data: curves.orange, color: '#fb923c', label: 'orange' }
     ].filter(curve => {
       switch(curve.label) {
         case 'white': return batchChartState.showWhite;
@@ -2259,6 +2367,7 @@ function updateFrameNavigationButtons() {
         case 'yellow': return batchChartState.showYellow;
         case 'pink': return batchChartState.showPink;
         case 'purple': return batchChartState.showPurple;
+        case 'orange': return batchChartState.showOrange;
         default: return false;
       }
     });
@@ -2433,6 +2542,7 @@ function updateFrameNavigationButtons() {
       const yellow = parseFloat(values[7]);
       const pink = parseFloat(values[8]);
       const purple = parseFloat(values[9]);
+      const orange = parseFloat(values[10] || 0); // Handle missing orange data
 
       const key = `${fileName}_${videoId}`;
       if (!videosMap.has(key)) {
@@ -2441,7 +2551,7 @@ function updateFrameNavigationButtons() {
           videoId,
           duration,
           sampleFps,
-          curves: { time: [], white: [], blue: [], yellow: [], pink: [], purple: [] }
+          curves: { time: [], white: [], blue: [], yellow: [], pink: [], purple: [], orange: [] }
         });
       }
 
@@ -2452,6 +2562,7 @@ function updateFrameNavigationButtons() {
       video.curves.yellow.push(yellow);
       video.curves.pink.push(pink);
       video.curves.purple.push(purple);
+      video.curves.orange.push(orange);
     }
 
     return Array.from(videosMap.values());
@@ -2464,7 +2575,8 @@ function updateFrameNavigationButtons() {
       showBlue: batchShowBlue ? batchShowBlue.checked : true,
       showYellow: batchShowYellow ? batchShowYellow.checked : true,
       showPink: batchShowPink ? batchShowPink.checked : true,
-      showPurple: batchShowPurple ? batchShowPurple.checked : true
+      showPurple: batchShowPurple ? batchShowPurple.checked : true,
+      showOrange: batchShowOrange ? batchShowOrange.checked : true
     };
 
     // Re-render all charts
@@ -2524,8 +2636,24 @@ function updateFrameNavigationButtons() {
 
         // Add parameters
         Object.entries(p).forEach(([key, el]) => {
-          if (el && el.value !== '') formData.append(key, String(el.value));
+          if (el) {
+            let value = el.value;
+            // Ensure default values for critical parameters
+            if (key === 'conditional_threshold1' && (value === '' || value === undefined)) value = '120';
+            if (key === 'conditional_threshold2' && (value === '' || value === undefined)) value = '160';
+            if (key === 'high_threshold' && (value === '' || value === undefined)) value = '130';
+            formData.append(key, String(value));
+          }
         });
+
+        // Debug: Log batch analysis parameters (only for first few analyses)
+        if (i < 2) {
+          console.log(`📤 Sending batch analysis parameters for ${analysisData.fileName}:`, {
+            conditional_threshold1: p.conditional_threshold1?.value || '120',
+            conditional_threshold2: p.conditional_threshold2?.value || '160',
+            high_threshold: p.high_threshold?.value || '130'
+          });
+        }
 
         const response = await fetch('http://localhost:8421/analyze', {
           method: 'POST',
@@ -2776,7 +2904,7 @@ function updateFrameNavigationButtons() {
   }
 
   // Batch chart curve toggles
-  [batchShowWhite, batchShowBlue, batchShowYellow, batchShowPink, batchShowPurple].forEach((toggle, index) => {
+  [batchShowWhite, batchShowBlue, batchShowYellow, batchShowPink, batchShowPurple, batchShowOrange].forEach((toggle, index) => {
     if (toggle) {
       toggle.addEventListener('change', () => {
         updateBatchChartVisibility();

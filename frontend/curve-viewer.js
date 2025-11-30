@@ -20,6 +20,7 @@ const app = {
         showYellow: true,
         showPink: true,
         showPurple: true,
+        showOrange: true,
         columnsPerRow: 'auto', // 'auto' or number 1-6
         batchSelectMode: false
     },
@@ -52,6 +53,7 @@ const elements = {
     showYellow: null,
     showPink: null,
     showPurple: null,
+    showOrange: null,
     zoomInBtn: null,
     zoomOutBtn: null,
     resetZoomBtn: null,
@@ -166,7 +168,7 @@ function setupEventListeners() {
     }
 
     // Curve visibility controls
-    [elements.showWhite, elements.showBlue, elements.showYellow, elements.showPink, elements.showPurple]
+    [elements.showWhite, elements.showBlue, elements.showYellow, elements.showPink, elements.showPurple, elements.showOrange]
         .forEach((checkbox, index) => {
             if (checkbox) {
                 checkbox.addEventListener('change', () => handleCurveVisibilityChange(index));
@@ -361,32 +363,52 @@ function parseCSVFile(content) {
         const headers = lines[0].split(',').map(h => h.trim());
         const videoMap = new Map();
 
+        // Check if this is the new export format (with 11 columns) or old format (with 7 columns)
+        const isNewFormat = headers.length >= 11;
+
         // Process data rows
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',').map(v => v.trim());
-            if (values.length < headers.length) continue;
+            if (values.length < 7) continue; // Minimum columns required
 
-            const fileName = values[0];
-            const time = parseFloat(values[1]) || 0;
-            const white = parseFloat(values[2]) || 0;
-            const blue = parseFloat(values[3]) || 0;
-            const yellow = parseFloat(values[4]) || 0;
-            const pink = parseFloat(values[5]) || 0;
-            const purple = parseFloat(values[6]) || 0;
+            let fileName, time, white, blue, yellow, pink, purple, orange;
+
+            if (isNewFormat) {
+                // New format: 文件名,视频ID,时长(s),采样率,时间点(s),白曲线,蓝曲线,黄曲线,粉曲线,紫曲线,橙曲线
+                fileName = values[0];
+                time = parseFloat(values[4]) || 0;
+                white = parseFloat(values[5]) || 0;
+                blue = parseFloat(values[6]) || 0;
+                yellow = parseFloat(values[7]) || 0;
+                pink = parseFloat(values[8]) || 0;
+                purple = parseFloat(values[9]) || 0;
+                orange = parseFloat(values[10]) || 0;
+            } else {
+                // Old format: 文件名,时间,白曲线,蓝曲线,黄曲线,粉曲线,紫曲线
+                fileName = values[0];
+                time = parseFloat(values[1]) || 0;
+                white = parseFloat(values[2]) || 0;
+                blue = parseFloat(values[3]) || 0;
+                yellow = parseFloat(values[4]) || 0;
+                pink = parseFloat(values[5]) || 0;
+                purple = parseFloat(values[6]) || 0;
+                orange = 0; // Default value for old format
+            }
 
             if (!videoMap.has(fileName)) {
                 videoMap.set(fileName, {
                     fileName: fileName,
                     videoId: generateId(),
                     duration: 0,
-                    sampleFps: 8,
+                    sampleFps: isNewFormat ? (parseFloat(values[3]) || 8) : 8,
                     curves: {
                         time: [],
                         white: [],
                         blue: [],
                         yellow: [],
                         pink: [],
-                        purple: []
+                        purple: [],
+                        orange: []
                     }
                 });
             }
@@ -398,9 +420,14 @@ function parseCSVFile(content) {
             video.curves.yellow.push(yellow);
             video.curves.pink.push(pink);
             video.curves.purple.push(purple);
+            video.curves.orange.push(orange);
 
-            // Update duration
-            video.duration = Math.max(video.duration, time);
+            // Update duration (use provided duration or max time)
+            if (isNewFormat && values[2]) {
+                video.duration = Math.max(video.duration, parseFloat(values[2]) || 0);
+            } else {
+                video.duration = Math.max(video.duration, time);
+            }
         }
 
         const result = Array.from(videoMap.values());
@@ -409,6 +436,7 @@ function parseCSVFile(content) {
             throw new Error('CSV 文件中没有有效的数据');
         }
 
+        console.log(`✅ Successfully parsed CSV file: ${result.length} videos, new format: ${isNewFormat}`);
         return result;
 
     } catch (error) {
@@ -426,16 +454,33 @@ function validateCurveData(data) {
         if (!curves) return false;
 
         const requiredCurves = ['time', 'white', 'blue', 'yellow', 'pink', 'purple'];
-        const hasAllCurves = requiredCurves.every(curve =>
+        const optionalCurves = ['orange'];
+
+        // Check required curves
+        const hasRequiredCurves = requiredCurves.every(curve =>
             Array.isArray(curves[curve]) && curves[curve].length > 0
         );
 
-        if (!hasAllCurves) return false;
+        if (!hasRequiredCurves) return false;
 
-        // Check that all curve arrays have the same length
+        // Check optional curves (allow empty)
+        const hasOptionalCurves = optionalCurves.every(curve =>
+            !curves[curve] || (Array.isArray(curves[curve]) && curves[curve].length === 0 || curves[curve].length === curves.time.length)
+        );
+
+        if (!hasOptionalCurves) return false;
+
+        // Check that all required curve arrays have the same length
         const lengths = requiredCurves.map(curve => curves[curve].length);
         const firstLength = lengths[0];
-        return lengths.every(length => length === firstLength);
+        const sameLength = lengths.every(length => length === firstLength);
+
+        // If orange curve exists, it should also have the same length
+        if (curves.orange && curves.orange.length > 0 && curves.orange.length !== firstLength) {
+            return false;
+        }
+
+        return sameLength;
     });
 }
 
@@ -846,16 +891,35 @@ function renderChartOnCanvas(canvas, videoData) {
         { key: 'blue', color: '#4fc3f7', width: 2, visible: app.viewSettings.showBlue },
         { key: 'yellow', color: '#fbbf24', width: 2, visible: app.viewSettings.showYellow },
         { key: 'pink', color: '#f9a8d4', width: 2, visible: app.viewSettings.showPink },
-        { key: 'purple', color: '#a855f7', width: 2, visible: app.viewSettings.showPurple }
+        { key: 'purple', color: '#a855f7', width: 2, visible: app.viewSettings.showPurple },
+        { key: 'orange', color: '#fb923c', width: 2, visible: app.viewSettings.showOrange }
     ];
+
+    // Debug: Log curve data structure
+    console.log(`🎨 Rendering chart for: ${videoData.fileName}`, {
+        hasCurves: !!curves,
+        timeLength: curves?.time?.length,
+        curveKeys: Object.keys(curves || {}),
+        sampleData: {
+            time: curves?.time?.slice(0, 3),
+            white: curves?.white?.slice(0, 3),
+            blue: curves?.blue?.slice(0, 3),
+            yellow: curves?.yellow?.slice(0, 3),
+            pink: curves?.pink?.slice(0, 3),
+            purple: curves?.purple?.slice(0, 3),
+            orange: curves?.orange?.slice(0, 3)
+        }
+    });
 
     curveConfigs.forEach(config => {
         if (!config.visible || !curves[config.key] || curves[config.key].length === 0) {
-            console.log(`⏭️ Skipping ${config.key} curve: visible=${config.visible}, hasData=${!!curves[config.key]}`);
+            console.log(`⏭️ Skipping ${config.key} curve: visible=${config.visible}, hasData=${!!curves[config.key]}, length=${curves[config.key]?.length || 0}`);
             return;
         }
 
-        console.log(`✏️ Drawing ${config.key} curve with ${curves[config.key].length} points`);
+        // Log first few values for debugging
+        const sampleValues = curves[config.key].slice(0, 3);
+        console.log(`✏️ Drawing ${config.key} curve with ${curves[config.key].length} points, sample values:`, sampleValues);
 
         ctx.strokeStyle = config.color;
         ctx.lineWidth = config.width; // Use constant line width, size is controlled by CSS
@@ -969,8 +1033,8 @@ function drawAxes(ctx, padding, chartWidth, chartHeight, timeRange, valueRange) 
 
 // Event Handlers
 function handleCurveVisibilityChange(curveIndex) {
-    const curveNames = ['showWhite', 'showBlue', 'showYellow', 'showPink', 'showPurple'];
-    const settingKeys = ['showWhite', 'showBlue', 'showYellow', 'showPink', 'showPurple'];
+    const curveNames = ['showWhite', 'showBlue', 'showYellow', 'showPink', 'showPurple', 'showOrange'];
+    const settingKeys = ['showWhite', 'showBlue', 'showYellow', 'showPink', 'showPurple', 'showOrange'];
 
     app.viewSettings[settingKeys[curveIndex]] = elements[curveNames[curveIndex]]?.checked || false;
 
