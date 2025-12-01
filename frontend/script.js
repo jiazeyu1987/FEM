@@ -913,7 +913,7 @@ function updateFrameNavigationButtons() {
 }
 
 // Peak detection functions
-function detectWhiteCurvePeaks(sensitivity = 2.0, minDistance = 5) {
+function detectWhiteCurvePeaks(sensitivity = 100, minDistance = 5) {
   if (!analyzedSeries || analyzedSeries.length === 0) {
     console.warn('No data available for peak detection');
     return [];
@@ -921,7 +921,7 @@ function detectWhiteCurvePeaks(sensitivity = 2.0, minDistance = 5) {
 
   // Extract white curve data (ROI average grayscale values)
   const whiteCurve = analyzedSeries.map(p => p.roi);
-  const peaks = [];
+  const peakIntervals = [];
 
   // Calculate first derivative using finite differences
   const derivative = new Array(whiteCurve.length).fill(0);
@@ -929,34 +929,57 @@ function detectWhiteCurvePeaks(sensitivity = 2.0, minDistance = 5) {
     derivative[i] = whiteCurve[i] - whiteCurve[i - 1];
   }
 
-  // Find zero-crossings from positive to negative (peak detection)
-  let lastPeakIndex = -minDistance; // Ensure minimum distance between peaks
+  // Find peak intervals using first derivative method
+  let inPeak = false;
+  let peakStartIndex = null;
+  let peakMax = -Infinity;
+  let peakMaxIndex = null;
 
-  for (let i = 1; i < derivative.length - 1; i++) {
-    // Check for zero crossing: derivative goes from positive to negative
-    if (derivative[i] > 0 && derivative[i + 1] < 0) {
-      // Linear interpolation to find more precise peak position
-      const peakIndex = i + (-derivative[i]) / (derivative[i + 1] - derivative[i]);
+  for (let i = 1; i < derivative.length; i++) {
+    // Start of peak: derivative changes from <=0 to >0 (start rising)
+    if (!inPeak && derivative[i] > 0 && derivative[i - 1] <= 0) {
+      inPeak = true;
+      peakStartIndex = i;
+      peakMax = whiteCurve[i];
+      peakMaxIndex = i;
+    }
+    // During peak: track maximum value
+    else if (inPeak) {
+      peakMax = Math.max(peakMax, whiteCurve[i]);
+      if (peakMax === whiteCurve[i]) peakMaxIndex = i;
 
-      // Check minimum distance constraint
-      if (peakIndex - lastPeakIndex >= minDistance) {
-        const peakValue = whiteCurve[Math.round(peakIndex)];
+      // End of peak: derivative changes from >=0 to <0 (start falling)
+      if (derivative[i] < 0 && derivative[i - 1] >= 0) {
+        const peakEndIndex = i;
 
-        // Apply sensitivity threshold (minimum peak height)
-        if (peakValue >= sensitivity) {
-          peaks.push({
-            frame: Math.round(peakIndex),
-            time: analyzedXs[Math.round(peakIndex)] || 0,
-            value: peakValue
-          });
-          lastPeakIndex = peakIndex;
+        // Check if peak meets sensitivity threshold (minimum height)
+        if (peakMax >= sensitivity) {
+          // Check minimum distance from previous peak
+          if (peakIntervals.length === 0 ||
+              peakStartIndex - peakIntervals[peakIntervals.length - 1].endIndex >= minDistance) {
+
+            peakIntervals.push({
+              start: analyzedXs[peakStartIndex] || 0,
+              end: analyzedXs[peakEndIndex] || 0,
+              startIndex: peakStartIndex,
+              endIndex: peakEndIndex,
+              maxValue: peakMax,
+              maxIndex: peakMaxIndex,
+              maxTime: analyzedXs[peakMaxIndex] || 0
+            });
+          }
         }
+
+        inPeak = false;
+        peakStartIndex = null;
+        peakMax = -Infinity;
+        peakMaxIndex = null;
       }
     }
   }
 
-  console.log(`Detected ${peaks.length} peaks with sensitivity=${sensitivity}, minDistance=${minDistance}`);
-  return peaks;
+  console.log(`Detected ${peakIntervals.length} peak intervals with sensitivity=${sensitivity}, minDistance=${minDistance}`);
+  return peakIntervals;
 }
 
 function clearTimelineMarkers() {
@@ -975,20 +998,20 @@ function updatePeakDetection() {
   const sensitivity = Number(peakSensitivityEl.value);
   const minDistance = Number(peakMinDistanceEl.value);
 
-  // Detect peaks
+  // Detect peak intervals
   detectedPeaks = detectWhiteCurvePeaks(sensitivity, minDistance);
 
   // Clear existing timeline markers
   clearTimelineMarkers();
 
-  // Update timeline to show peaks
+  // Update timeline to show peak intervals
   renderTimeline();
 
   // Update UI
   if (detectedPeaks.length > 0) {
-    statusEl.textContent = `检测到 ${detectedPeaks.length} 个波峰`;
+    statusEl.textContent = `检测到 ${detectedPeaks.length} 个波峰区间`;
   } else {
-    statusEl.textContent = '未检测到波峰';
+    statusEl.textContent = '未检测到波峰区间';
   }
 
   // Update button states
@@ -998,7 +1021,7 @@ function updatePeakDetection() {
 function clearPeaks() {
   detectedPeaks = [];
   renderTimeline();
-  statusEl.textContent = '已清除波峰标记';
+  statusEl.textContent = '已清除波峰区间标记';
 
   // Update button states
   enablePeakDetectionControls();
@@ -1142,18 +1165,24 @@ function clearPeaks() {
       if (ct>=minX && ct<=maxX){ ctx.fillStyle = '#60a5fa'; const x = x2px(ct); ctx.fillRect(x-1, 2, 2, H-4); }
     }
 
-    // peak markers
-    ctx.fillStyle = '#10b981'; // Green color for peaks
+    // peak intervals - semi-transparent green coverage
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.3)'; // Semi-transparent green for peak intervals
     (detectedPeaks||[]).forEach(peak => {
-      if (peak.time >= minX && peak.time <= maxX) {
-        const x = x2px(peak.time);
-        // Draw triangle pointing up
-        ctx.beginPath();
-        ctx.moveTo(x, H/2 + 4); // Bottom point of triangle
-        ctx.lineTo(x - 3, H/2 - 4); // Left point
-        ctx.lineTo(x + 3, H/2 - 4); // Right point
-        ctx.closePath();
-        ctx.fill();
+      if (peak.end >= minX && peak.start <= maxX) {
+        const x1 = x2px(Math.max(minX, peak.start));
+        const x2 = x2px(Math.min(maxX, peak.end));
+        ctx.fillRect(x1, 4, Math.max(1, x2-x1), H-8);
+      }
+    });
+
+    // peak interval borders for clarity
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)'; // Darker green for borders
+    ctx.lineWidth = 1;
+    (detectedPeaks||[]).forEach(peak => {
+      if (peak.end >= minX && peak.start <= maxX) {
+        const x1 = x2px(Math.max(minX, peak.start));
+        const x2 = x2px(Math.min(maxX, peak.end));
+        ctx.strokeRect(x1, 4, Math.max(1, x2-x1), H-8);
       }
     });
 
