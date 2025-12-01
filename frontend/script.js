@@ -1127,8 +1127,8 @@ function classifyPeakColor(frameDifference, differenceThreshold) {
     return 'white'; // 边界情况，数据不足
   }
 
-  // 如果后5帧平均值比前5帧大超过阈值，标红色，否则绿色
-  return frameDifference > differenceThreshold ? 'red' : 'green';
+  // 如果后5帧平均值比前5帧大超过阈值，标绿色，否则红色
+  return frameDifference > differenceThreshold ? 'green' : 'red';
 }
 
 // 去重重叠的波峰区域
@@ -3550,6 +3550,63 @@ function clearPeaks() {
       });
     });
   }
+
+  // Automatic re-detection when threshold parameters change
+  function setupAutoReDetection() {
+    // Smart trigger condition check
+    function shouldAutoReDetect() {
+      return analyzedSeries &&
+             analyzedSeries.length > 0 &&
+             detectedPeaks &&
+             detectedPeaks.length > 0 &&
+             document.querySelector('input[name="peakMethod"]:checked').value === 'threshold';
+    }
+
+    // Auto re-detection function with debouncing
+    let reDetectTimeout = null;
+    function scheduleReDetection() {
+      if (!shouldAutoReDetect()) {
+        return; // Don't trigger if conditions aren't met
+      }
+
+      // Clear existing timeout to debounce rapid changes
+      if (reDetectTimeout) {
+        clearTimeout(reDetectTimeout);
+      }
+
+      // Schedule re-detection after a short delay (300ms)
+      reDetectTimeout = setTimeout(() => {
+        console.log('Auto-re-detecting peaks due to parameter change');
+        updatePeakDetection();
+        reDetectTimeout = null;
+      }, 300);
+    }
+
+    // Add event listeners for threshold parameters
+    if (differenceThresholdEl) {
+      differenceThresholdEl.addEventListener('input', () => {
+        console.log(`Difference threshold changed to: ${differenceThresholdEl.value}`);
+        scheduleReDetection();
+      });
+    }
+
+    if (absoluteThresholdEl) {
+      absoluteThresholdEl.addEventListener('input', () => {
+        console.log(`Absolute threshold changed to: ${absoluteThresholdEl.value}`);
+        scheduleReDetection();
+      });
+    }
+
+    if (baselineFramesEl) {
+      baselineFramesEl.addEventListener('input', () => {
+        console.log(`Baseline frames changed to: ${baselineFramesEl.value}`);
+        scheduleReDetection();
+      });
+    }
+  }
+
+  // Setup auto re-detection when controls are enabled
+  setupAutoReDetection();
 
   // Enable peak detection buttons when analysis is complete
   function enablePeakDetectionControls() {
