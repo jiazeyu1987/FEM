@@ -110,6 +110,7 @@
   const peakMinDistanceEl = document.getElementById('peakMinDistance');
   const absoluteThresholdEl = document.getElementById('absoluteThreshold');
   const baselineFramesEl = document.getElementById('baselineFrames');
+  const differenceThresholdEl = document.getElementById('differenceThreshold');
   const detectPeaksBtn = document.getElementById('detectPeaksBtn');
   const clearPeaksBtn = document.getElementById('clearPeaksBtn');
   const peakMethodRadios = document.querySelectorAll('input[name="peakMethod"]');
@@ -1033,6 +1034,11 @@ function detectWhiteCurvePeaks(sensitivity = 20, minPeakWidth = 3, maxPeakWidth 
 
         // Calculate peak characteristics
         const peakWidth = rightBound - leftBound;
+
+        // 计算帧差值并进行颜色分类（为形态检测方法添加颜色支持）
+        const frameDifference = calculateFrameDifference(leftBound, rightBound, analyzedSeries);
+        const color = classifyPeakColor(frameDifference, 2.1); // 使用默认阈值
+
         const peakInfo = {
           start: analyzedXs[leftBound] || 0,
           end: analyzedXs[rightBound] || 0,
@@ -1045,13 +1051,16 @@ function detectWhiteCurvePeaks(sensitivity = 20, minPeakWidth = 3, maxPeakWidth 
           relativeHeight: currentRelHeight,
           leftRiseAmount: leftRiseAmount,
           rightFallAmount: rightFallAmount,
-          peakWidth: peakWidth
+          peakWidth: peakWidth,
+          frameDifference: frameDifference,
+          color: color,
+          method: 'morphology'
         };
 
         // Check minimum distance from previous peaks (distance between peak starts)
         if (peaks.length === 0 || leftBound - peaks[peaks.length - 1].startIndex >= minDistance) {
           peaks.push(peakInfo);
-          console.log(`Peak confirmed and added: width=${peakWidth}, start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s`);
+          console.log(`Peak confirmed and added: width=${peakWidth}, start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, color=${color}, diff=${frameDifference ? frameDifference.toFixed(3) : 'N/A'}`);
         } else {
           console.log(`Peak rejected - too close to previous peak (distance: ${leftBound - peaks[peaks.length - 1].startIndex} < ${minDistance})`);
         }
@@ -1064,7 +1073,136 @@ function detectWhiteCurvePeaks(sensitivity = 20, minPeakWidth = 3, maxPeakWidth 
 }
 
 // Absolute threshold-based peak detection
-function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5) {
+// 计算波峰区域的帧差值
+function calculateFrameDifference(peakStartIndex, peakEndIndex, analyzedSeries) {
+  if (!analyzedSeries || analyzedSeries.length === 0) {
+    return null;
+  }
+
+  const beforeFrames = 5;
+  const afterFrames = 5;
+
+  // 波峰开始前的5帧（不包括波峰区域）
+  const beforeStart = Math.max(0, peakStartIndex - beforeFrames);
+  const beforeEnd = Math.max(0, peakStartIndex - 1);
+
+  // 波峰结束后的5帧（不包括波峰区域）
+  const afterStart = Math.min(analyzedSeries.length - 1, peakEndIndex + 1);
+  const afterEnd = Math.min(analyzedSeries.length - 1, peakEndIndex + afterFrames);
+
+  // 检查是否有足够的数据
+  if (beforeEnd < beforeStart || afterStart > afterEnd) {
+    console.warn(`Insufficient frame data for peak at ${peakStartIndex}-${peakEndIndex}`);
+    return null;
+  }
+
+  // 计算前5帧和后5帧的平均灰度值
+  let beforeSum = 0;
+  let beforeCount = 0;
+  for (let i = beforeStart; i <= beforeEnd; i++) {
+    beforeSum += analyzedSeries[i].roi;
+    beforeCount++;
+  }
+
+  let afterSum = 0;
+  let afterCount = 0;
+  for (let i = afterStart; i <= afterEnd; i++) {
+    afterSum += analyzedSeries[i].roi;
+    afterCount++;
+  }
+
+  const beforeAvg = beforeCount > 0 ? beforeSum / beforeCount : 0;
+  const afterAvg = afterCount > 0 ? afterSum / afterCount : 0;
+
+  const difference = afterAvg - beforeAvg;
+
+  console.log(`Peak ${peakStartIndex}-${peakEndIndex}: Before avg=${beforeAvg.toFixed(3)}, After avg=${afterAvg.toFixed(3)}, Diff=${difference.toFixed(3)}`);
+
+  return difference;
+}
+
+// 根据帧差值对波峰进行颜色分类
+function classifyPeakColor(frameDifference, differenceThreshold) {
+  if (frameDifference === null) {
+    return 'white'; // 边界情况，数据不足
+  }
+
+  // 如果后5帧平均值比前5帧大超过阈值，标红色，否则绿色
+  return frameDifference > differenceThreshold ? 'red' : 'green';
+}
+
+// 去重重叠的波峰区域
+function deduplicatePeaks(peaks) {
+  if (peaks.length === 0) {
+    return [];
+  }
+
+  console.log(`Starting deduplication with ${peaks.length} peaks`);
+
+  // 按波峰开始时间排序
+  const sortedPeaks = [...peaks].sort((a, b) => a.start - b.start);
+  const deduped = [];
+
+  for (const peak of sortedPeaks) {
+    // 查找是否有重叠的波峰
+    const overlappingIndex = deduped.findIndex(existingPeak =>
+      existingPeak.start <= peak.end && peak.start <= existingPeak.end
+    );
+
+    if (overlappingIndex === -1) {
+      // 没有重叠，直接添加
+      deduped.push(peak);
+      console.log(`Added new peak: [${peak.start.toFixed(2)}s, ${peak.end.toFixed(2)}s], color: ${peak.color}`);
+    } else {
+      // 有重叠，需要合并或选择更优的
+      const existingPeak = deduped[overlappingIndex];
+      console.log(`Found overlapping peaks:`);
+      console.log(`  Existing: [${existingPeak.start.toFixed(2)}s, ${existingPeak.end.toFixed(2)}s], method: ${existingPeak.method}, color: ${existingPeak.color}`);
+      console.log(`  New: [${peak.start.toFixed(2)}s, ${peak.end.toFixed(2)}s], method: ${peak.method}, color: ${peak.color}`);
+
+      // 合并策略：
+      // 1. 优先阈值法（threshold）
+      // 2. 如果方法相同，选择maxValue更高的
+      // 3. 合并时间范围（取最小开始时间和最大结束时间）
+      let shouldReplace = false;
+
+      if (peak.method === 'threshold' && existingPeak.method !== 'threshold') {
+        shouldReplace = true;
+      } else if (peak.method === existingPeak.method && peak.maxValue > existingPeak.maxValue) {
+        shouldReplace = true;
+      }
+
+      if (shouldReplace) {
+        // 合并时间范围
+        const mergedPeak = {
+          ...peak,
+          start: Math.min(peak.start, existingPeak.start),
+          end: Math.max(peak.end, existingPeak.end),
+          startIndex: Math.min(peak.startIndex, existingPeak.startIndex),
+          endIndex: Math.max(peak.endIndex, existingPeak.endIndex)
+        };
+        deduped[overlappingIndex] = mergedPeak;
+        console.log(`Replaced with merged peak: [${mergedPeak.start.toFixed(2)}s, ${mergedPeak.end.toFixed(2)}s], color: ${mergedPeak.color}`);
+      } else {
+        // 保留现有的，但可能需要合并时间范围
+        const mergedPeak = {
+          ...existingPeak,
+          start: Math.min(existingPeak.start, peak.start),
+          end: Math.max(existingPeak.end, peak.end),
+          startIndex: Math.min(existingPeak.startIndex, peak.startIndex),
+          endIndex: Math.max(existingPeak.endIndex, peak.endIndex)
+        };
+        deduped[overlappingIndex] = mergedPeak;
+        console.log(`Kept existing and merged to: [${mergedPeak.start.toFixed(2)}s, ${mergedPeak.end.toFixed(2)}s], color: ${mergedPeak.color}`);
+      }
+    }
+  }
+
+  console.log(`Deduplication complete: ${peaks.length} -> ${deduped.length} peaks`);
+  return deduped;
+}
+
+function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5, differenceThreshold = 2.1) {
   if (!analyzedSeries || analyzedSeries.length === 0) {
     console.warn('No data available for threshold peak detection');
     return [];
@@ -1095,13 +1233,32 @@ function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5) {
       const segEnd = i - 1;
       console.log(`Leaving peak region at index ${segEnd}, value ${v[segEnd].toFixed(2)}`);
 
-      const startIndex = Math.max(0, segStart - marginFrames);
-      const endIndex = Math.min(n - 1, segEnd + marginFrames);
+      // 计算扩展边界，但避免过度扩展
+      let actualMarginFrames = marginFrames;
+
+      // 检查是否可能与其他峰重叠（如果有已存在的峰）
+      if (peaks.length > 0) {
+        const lastPeak = peaks[peaks.length - 1];
+        const distanceToLastPeak = segStart - lastPeak.endIndex;
+
+        // 如果距离太小，减少边距扩展
+        if (distanceToLastPeak < marginFrames * 2) {
+          actualMarginFrames = Math.max(1, Math.floor(distanceToLastPeak / 2));
+          console.log(`Reduced margin frames from ${marginFrames} to ${actualMarginFrames} to avoid overlap with previous peak`);
+        }
+      }
+
+      const startIndex = Math.max(0, segStart - actualMarginFrames);
+      const endIndex = Math.min(n - 1, segEnd + actualMarginFrames);
 
       const segmentValues = v.slice(segStart, segEnd + 1);
       const maxValue = Math.max(...segmentValues);
       const maxIndex = segStart + segmentValues.indexOf(maxValue);
       const segmentDuration = xs[segEnd] - xs[segStart];
+
+      // 计算帧差值并进行颜色分类
+      const frameDifference = calculateFrameDifference(segStart, segEnd, analyzedSeries);
+      const color = classifyPeakColor(frameDifference, differenceThreshold);
 
       const peakInfo = {
         start: xs[startIndex] || 0,
@@ -1113,15 +1270,17 @@ function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5) {
         maxTime: xs[maxIndex] || 0,
         method: 'threshold',
         threshold: threshold,
-        marginFrames: marginFrames,
+        marginFrames: actualMarginFrames,
         segmentDuration: segmentDuration,
         segmentStartIndex: segStart,
         segmentEndIndex: segEnd,
-        segmentValues: segmentValues.length
+        segmentValues: segmentValues.length,
+        frameDifference: frameDifference,
+        color: color
       };
 
       peaks.push(peakInfo);
-      console.log(`Peak added: start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, max=${peakInfo.maxValue.toFixed(2)}`);
+      console.log(`Peak added: start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, max=${peakInfo.maxValue.toFixed(2)}, color=${color}, diff=${frameDifference ? frameDifference.toFixed(3) : 'N/A'}`);
 
       inSeg = false;
     }
@@ -1130,13 +1289,29 @@ function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5) {
   // 如果一直到结尾还在波峰区域
   if (inSeg) {
     const segEnd = n - 1;
-    const startIndex = Math.max(0, segStart - marginFrames);
+
+    // 对于结尾的波峰，也应用相似的边界优化逻辑
+    let actualMarginFrames = marginFrames;
+    if (peaks.length > 0) {
+      const lastPeak = peaks[peaks.length - 1];
+      const distanceToLastPeak = segStart - lastPeak.endIndex;
+      if (distanceToLastPeak < marginFrames * 2) {
+        actualMarginFrames = Math.max(1, Math.floor(distanceToLastPeak / 2));
+        console.log(`Final peak: Reduced margin frames from ${marginFrames} to ${actualMarginFrames} to avoid overlap with previous peak`);
+      }
+    }
+
+    const startIndex = Math.max(0, segStart - actualMarginFrames);
     const endIndex = segEnd;
 
     const segmentValues = v.slice(segStart, segEnd + 1);
     const maxValue = Math.max(...segmentValues);
     const maxIndex = segStart + segmentValues.indexOf(maxValue);
     const segmentDuration = xs[segEnd] - xs[segStart];
+
+    // 计算帧差值并进行颜色分类
+    const frameDifference = calculateFrameDifference(segStart, segEnd, analyzedSeries);
+    const color = classifyPeakColor(frameDifference, differenceThreshold);
 
     const peakInfo = {
       start: xs[startIndex] || 0,
@@ -1148,15 +1323,17 @@ function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5) {
       maxTime: xs[maxIndex] || 0,
       method: 'threshold',
       threshold: threshold,
-      marginFrames: marginFrames,
+      marginFrames: actualMarginFrames,
       segmentDuration: segmentDuration,
       segmentStartIndex: segStart,
       segmentEndIndex: segEnd,
-      segmentValues: segmentValues.length
+      segmentValues: segmentValues.length,
+      frameDifference: frameDifference,
+      color: color
     };
 
     peaks.push(peakInfo);
-    console.log(`Final peak added: start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, max=${peakInfo.maxValue.toFixed(2)}`);
+    console.log(`Final peak added: start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, max=${peakInfo.maxValue.toFixed(2)}, color=${color}, diff=${frameDifference ? frameDifference.toFixed(3) : 'N/A'}`);
   }
 
   console.log(`Final result: ${peaks.length} threshold peaks detected`);
@@ -1176,17 +1353,21 @@ function updatePeakDetection() {
     return;
   }
 
+  // 清空之前的波峰检测结果，避免累积
+  detectedPeaks = [];
+
   const selectedMethod = document.querySelector('input[name="peakMethod"]:checked').value;
 
   if (selectedMethod === 'threshold') {
     // 绝对阈值方法
     const threshold = Number(absoluteThresholdEl.value);
     const marginFrames = Number(baselineFramesEl.value);
+    const differenceThreshold = Number(differenceThresholdEl.value);
 
     console.log('Using threshold-based peak detection method:');
-    console.log(`Threshold: ${threshold}, Margin frames: ${marginFrames}`);
+    console.log(`Threshold: ${threshold}, Margin frames: ${marginFrames}, Difference threshold: ${differenceThreshold}`);
 
-    detectedPeaks = detectWhitePeaksByThreshold(threshold, marginFrames);
+    detectedPeaks = detectWhitePeaksByThreshold(threshold, marginFrames, differenceThreshold);
 
     statusEl.textContent = `绝对阈值法检测到 ${detectedPeaks.length} 个波峰区间`;
   } else {
@@ -1202,6 +1383,24 @@ function updatePeakDetection() {
     detectedPeaks = detectWhiteCurvePeaks(sensitivity, minPeakWidth, maxPeakWidth, minDistance);
 
     statusEl.textContent = `形态检测法检测到 ${detectedPeaks.length} 个尖锐波峰`;
+  }
+
+  // 对检测到的波峰进行去重处理，避免重叠
+  if (detectedPeaks.length > 0) {
+    const originalCount = detectedPeaks.length;
+    detectedPeaks = deduplicatePeaks(detectedPeaks);
+
+    // 统计颜色分布
+    const colorStats = detectedPeaks.reduce((stats, peak) => {
+      stats[peak.color] = (stats[peak.color] || 0) + 1;
+      return stats;
+    }, {});
+
+    console.log(`Peak color distribution:`, colorStats);
+
+    // 更新状态显示
+    const methodText = selectedMethod === 'threshold' ? '绝对阈值法' : '形态检测法';
+    statusEl.textContent = `${methodText}检测到 ${originalCount} 个波峰，去重后 ${detectedPeaks.length} 个 (绿:${colorStats.green || 0}, 红:${colorStats.red || 0}, 白:${colorStats.white || 0})`;
   }
 
   // Clear existing timeline markers
@@ -1391,23 +1590,51 @@ function clearPeaks() {
       if (ct>=minX && ct<=maxX){ ctx.fillStyle = '#60a5fa'; const x = x2px(ct); ctx.fillRect(x-1, 2, 2, H-4); }
     }
 
-    // peak intervals - semi-transparent green coverage
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.3)'; // Semi-transparent green for peak intervals
+    // peak intervals - color-coded coverage based on frame difference
     (detectedPeaks||[]).forEach(peak => {
       if (peak.end >= minX && peak.start <= maxX) {
         const x1 = x2px(Math.max(minX, peak.start));
         const x2 = x2px(Math.min(maxX, peak.end));
+
+        // 设置填充颜色基于波峰的颜色属性
+        switch (peak.color) {
+          case 'green':
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.3)'; // Semi-transparent green for stable peaks
+            break;
+          case 'red':
+            ctx.fillStyle = 'rgba(248, 113, 113, 0.3)'; // Semi-transparent red for unstable peaks
+            break;
+          case 'white':
+          default:
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Semi-transparent white for edge cases
+            break;
+        }
+
         ctx.fillRect(x1, 4, Math.max(1, x2-x1), H-8);
       }
     });
 
-    // peak interval borders for clarity
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)'; // Darker green for borders
+    // peak interval borders with matching colors
     ctx.lineWidth = 1;
     (detectedPeaks||[]).forEach(peak => {
       if (peak.end >= minX && peak.start <= maxX) {
         const x1 = x2px(Math.max(minX, peak.start));
         const x2 = x2px(Math.min(maxX, peak.end));
+
+        // 设置边框颜色基于波峰的颜色属性
+        switch (peak.color) {
+          case 'green':
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)'; // Darker green for borders
+            break;
+          case 'red':
+            ctx.strokeStyle = 'rgba(248, 113, 113, 0.8)'; // Darker red for borders
+            break;
+          case 'white':
+          default:
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // Semi-transparent white for borders
+            break;
+        }
+
         ctx.strokeRect(x1, 4, Math.max(1, x2-x1), H-8);
       }
     });

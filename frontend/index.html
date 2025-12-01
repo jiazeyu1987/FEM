@@ -52,16 +52,16 @@
               <label style="display: block; margin-bottom: 8px;">检测方法:</label>
               <div style="margin-bottom: 10px;">
                 <label style="margin-right: 15px;">
-                  <input type="radio" name="peakMethod" value="morphology" checked> 形态特征
+                  <input type="radio" name="peakMethod" value="morphology"> 形态特征
                 </label>
                 <label>
-                  <input type="radio" name="peakMethod" value="threshold"> 绝对阈值
+                  <input type="radio" name="peakMethod" value="threshold" checked> 绝对阈值
                 </label>
               </div>
             </div>
 
             <!-- 形态特征参数 -->
-            <div class="morphology-params peak-controls">
+            <div class="morphology-params peak-controls" style="display: none;">
               <label style="display: block; margin-bottom: 8px;">
                 波峰高度阈值:
                 <input type="number" id="peakSensitivity" min="10" max="200" step="5" value="20" style="width: 70px; margin-left: 8px;">
@@ -81,7 +81,7 @@
             </div>
 
             <!-- 绝对阈值参数 -->
-            <div class="threshold-params peak-controls" style="display: none; padding: 8px; background: #2a2a2a; border-radius: 4px; margin-top: 10px;">
+            <div class="threshold-params peak-controls" style="display: block; padding: 8px; background: #2a2a2a; border-radius: 4px; margin-top: 10px;">
               <label style="display: block; margin-bottom: 8px;">
                 绝对阈值 (灰度值):
                 <input type="number" id="absoluteThreshold" min="50" max="200" step="5" value="105" style="width: 70px; margin-left: 8px;">
@@ -90,6 +90,16 @@
                 基线帧数:
                 <input type="number" id="baselineFrames" min="1" max="20" step="1" value="5" style="width: 70px; margin-left: 8px;">
               </label>
+              <label style="display: block; margin-bottom: 8px;">
+                帧差值阈值 (颜色判定):
+                <input type="number" id="differenceThreshold" min="0.5" max="10.0" step="0.1" value="2.1" style="width: 70px; margin-left: 8px;">
+              </label>
+              <!-- 颜色图例 -->
+              <div style="font-size: 11px; color: #9ca3af; margin-top: 8px; padding: 6px; background: #1a1a1a; border-radius: 3px;">
+                <div style="margin-bottom: 3px;">🟩 绿色波峰: 帧差值 ≤ 阈值 (稳定)</div>
+                <div style="margin-bottom: 3px;">🟥 红色波峰: 帧差值 > 阈值 (不稳定)</div>
+                <div>⬜ 白色波峰: 边界情况 (数据不足)</div>
+              </div>
             </div>
 
             <div style="display: flex; gap: 8px; margin-top: 10px;">
