@@ -46,6 +46,23 @@
         <div class="section">
             <button id="analyzeBtn" disabled>分析</button>
           </div>
+          <div class="section">
+            <label class="label">白色曲线波峰检测</label>
+            <div class="peak-controls">
+              <label style="display: block; margin-bottom: 8px;">
+                波峰敏感度:
+                <input type="number" id="peakSensitivity" min="0.1" max="10" step="0.1" value="2.0" style="width: 70px; margin-left: 8px;">
+              </label>
+              <label style="display: block; margin-bottom: 8px;">
+                最小波峰间距:
+                <input type="number" id="peakMinDistance" min="1" max="50" step="1" value="5" style="width: 70px; margin-left: 8px;">
+              </label>
+              <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button id="detectPeaksBtn" class="detect-btn" disabled>检测波峰</button>
+                <button id="clearPeaksBtn" class="clear-btn-small" disabled>清除波峰</button>
+              </div>
+            </div>
+          </div>
           <!-- Hidden timeline shading parameters (keep functionality, remove UI) -->
 <input type="number" id="p_rise_thresh" step="0.1" value="15.5" style="display:none" />
 <input type="number" id="p_fall_thresh" step="0.1" value="-3" style="display:none" />

@@ -103,6 +103,12 @@
   const batchShowPurple = document.getElementById('batchShowPurple');
   const batchShowOrange = document.getElementById('batchShowOrange');
 
+  // Peak detection UI elements
+  const peakSensitivityEl = document.getElementById('peakSensitivity');
+  const peakMinDistanceEl = document.getElementById('peakMinDistance');
+  const detectPeaksBtn = document.getElementById('detectPeaksBtn');
+  const clearPeaksBtn = document.getElementById('clearPeaksBtn');
+
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
   // parameter inputs
@@ -133,6 +139,7 @@
   let dragging = false; let start = null; let rectPx = null;
   let analyzedXs = []; let analyzedEvents = []; let analyzedSeries = []; let analyzedBaseline = 0;
   let shadedIntervals = []; // [{start, end}] regions to shade on timeline
+  let detectedPeaks = []; // [{frame, time, value}] detected white curve peaks
   let lastBlueJudge = null;
   const timelineState = { fullMin: 0, fullMax: 0, min: 0, max: 0 };
   let zoom = 1.0;
@@ -645,7 +652,10 @@ function renderResult(data){
   timelineState.min = seriesStart;
   timelineState.max = seriesEnd;
   renderTimeline();
-    updateBlueJudge();
+  updateBlueJudge();
+
+  // Enable peak detection controls after analysis is complete
+  enablePeakDetectionControls();
 }
 
 // thresholds helper (kept close to shading logic)
@@ -901,6 +911,99 @@ function updateFrameNavigationButtons() {
   if (prevFrameBtn) prevFrameBtn.disabled = false;
   if (nextFrameBtn) nextFrameBtn.disabled = false;
 }
+
+// Peak detection functions
+function detectWhiteCurvePeaks(sensitivity = 2.0, minDistance = 5) {
+  if (!analyzedSeries || analyzedSeries.length === 0) {
+    console.warn('No data available for peak detection');
+    return [];
+  }
+
+  // Extract white curve data (ROI average grayscale values)
+  const whiteCurve = analyzedSeries.map(p => p.roi);
+  const peaks = [];
+
+  // Calculate first derivative using finite differences
+  const derivative = new Array(whiteCurve.length).fill(0);
+  for (let i = 1; i < whiteCurve.length; i++) {
+    derivative[i] = whiteCurve[i] - whiteCurve[i - 1];
+  }
+
+  // Find zero-crossings from positive to negative (peak detection)
+  let lastPeakIndex = -minDistance; // Ensure minimum distance between peaks
+
+  for (let i = 1; i < derivative.length - 1; i++) {
+    // Check for zero crossing: derivative goes from positive to negative
+    if (derivative[i] > 0 && derivative[i + 1] < 0) {
+      // Linear interpolation to find more precise peak position
+      const peakIndex = i + (-derivative[i]) / (derivative[i + 1] - derivative[i]);
+
+      // Check minimum distance constraint
+      if (peakIndex - lastPeakIndex >= minDistance) {
+        const peakValue = whiteCurve[Math.round(peakIndex)];
+
+        // Apply sensitivity threshold (minimum peak height)
+        if (peakValue >= sensitivity) {
+          peaks.push({
+            frame: Math.round(peakIndex),
+            time: analyzedXs[Math.round(peakIndex)] || 0,
+            value: peakValue
+          });
+          lastPeakIndex = peakIndex;
+        }
+      }
+    }
+  }
+
+  console.log(`Detected ${peaks.length} peaks with sensitivity=${sensitivity}, minDistance=${minDistance}`);
+  return peaks;
+}
+
+function clearTimelineMarkers() {
+  // Clear all existing timeline markers
+  shadedIntervals = [];
+  // Peaks will be cleared separately by setting detectedPeaks = []
+  console.log('Cleared all timeline markers');
+}
+
+function updatePeakDetection() {
+  if (!analyzedSeries || analyzedSeries.length === 0) {
+    alert('请先分析视频后再检测波峰');
+    return;
+  }
+
+  const sensitivity = Number(peakSensitivityEl.value);
+  const minDistance = Number(peakMinDistanceEl.value);
+
+  // Detect peaks
+  detectedPeaks = detectWhiteCurvePeaks(sensitivity, minDistance);
+
+  // Clear existing timeline markers
+  clearTimelineMarkers();
+
+  // Update timeline to show peaks
+  renderTimeline();
+
+  // Update UI
+  if (detectedPeaks.length > 0) {
+    statusEl.textContent = `检测到 ${detectedPeaks.length} 个波峰`;
+  } else {
+    statusEl.textContent = '未检测到波峰';
+  }
+
+  // Update button states
+  enablePeakDetectionControls();
+}
+
+function clearPeaks() {
+  detectedPeaks = [];
+  renderTimeline();
+  statusEl.textContent = '已清除波峰标记';
+
+  // Update button states
+  enablePeakDetectionControls();
+}
+
   function recomputeShadedIntervals(){
     if (!analyzedSeries || !analyzedSeries.length || !analyzedXs || !analyzedXs.length){ shadedIntervals = []; return; }
     const xs = analyzedXs;
@@ -1038,6 +1141,22 @@ function updateFrameNavigationButtons() {
       const ct = video.currentTime;
       if (ct>=minX && ct<=maxX){ ctx.fillStyle = '#60a5fa'; const x = x2px(ct); ctx.fillRect(x-1, 2, 2, H-4); }
     }
+
+    // peak markers
+    ctx.fillStyle = '#10b981'; // Green color for peaks
+    (detectedPeaks||[]).forEach(peak => {
+      if (peak.time >= minX && peak.time <= maxX) {
+        const x = x2px(peak.time);
+        // Draw triangle pointing up
+        ctx.beginPath();
+        ctx.moveTo(x, H/2 + 4); // Bottom point of triangle
+        ctx.lineTo(x - 3, H/2 - 4); // Left point
+        ctx.lineTo(x + 3, H/2 - 4); // Right point
+        ctx.closePath();
+        ctx.fill();
+      }
+    });
+
     // 不绘制左右角时间文本
   }
 
@@ -2911,6 +3030,30 @@ function updateFrameNavigationButtons() {
       });
     }
   });
+
+  // Peak detection event listeners
+  if (detectPeaksBtn) {
+    detectPeaksBtn.addEventListener('click', () => {
+      updatePeakDetection();
+    });
+  }
+
+  if (clearPeaksBtn) {
+    clearPeaksBtn.addEventListener('click', () => {
+      clearPeaks();
+    });
+  }
+
+  // Enable peak detection buttons when analysis is complete
+  function enablePeakDetectionControls() {
+    const hasData = analyzedSeries && analyzedSeries.length > 0;
+    if (detectPeaksBtn) {
+      detectPeaksBtn.disabled = !hasData;
+    }
+    if (clearPeaksBtn) {
+      clearPeaksBtn.disabled = !hasData || detectedPeaks.length === 0;
+    }
+  }
 
   // Enable export button when batch analysis completes
   function enableExportControls() {

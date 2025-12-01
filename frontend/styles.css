@@ -171,3 +171,11 @@ tbody tr:hover{background:#0b1220}
 .curve-stats-values{display:flex;justify-content:space-between;align-items:center;font-size:9px}
 .stat-item{color:#9ca3af}
 .stat-number{color:#cbd5e1;font-family:monospace;font-weight:500;min-width:35px;text-align:right}
+
+/* Peak Detection Styles */
+.peak-controls label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+.peak-controls input[type="number"]{background:#1f1f1f;border:1px solid var(--border);color:var(--text);border-radius:3px;padding:4px 6px;font-size:11px}
+.detect-btn{background:#10b981;color:white;border-color:#059669;font-weight:500;margin-bottom:6px}
+.detect-btn:hover:not(:disabled){background:#059669}
+.clear-btn-small{background:#6b7280;color:white;border-color:#4b5563;font-size:11px;padding:6px 8px}
+.clear-btn-small:hover:not(:disabled){background:#4b5563}

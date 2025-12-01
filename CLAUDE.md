@@ -35,6 +35,15 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8421 --reload
 python frontend/serve.py
 # OR use Windows PowerShell script
 ./start-frontend.ps1
+
+# Option 3: Root-level development server
+python serve.py
+```
+
+#### JavaScript Syntax Validation
+```bash
+# Validate JavaScript syntax (uses Node.js)
+node check_syntax.js
 ```
 
 ### Docker
@@ -46,8 +55,8 @@ docker run -p 8421:8421 hem-analyzer
 ## Key Technical Details
 
 ### Core Dependencies
-- **Backend**: FastAPI 0.115.0, OpenCV 4.10.0.84, NumPy 2.1.1, Uvicorn 0.30.6
-- **Frontend**: Pure JavaScript with Chart.js (embedded), no package.json
+- **Backend**: FastAPI 0.115.0, OpenCV 4.10.0.84 (headless), NumPy 2.1.1, Uvicorn 0.30.6, python-multipart 0.0.9, Starlette 0.38.4
+- **Frontend**: Pure JavaScript with custom canvas-based rendering (no external chart libraries), no package.json
 - **Video Processing**: MP4 files with frame sampling at configurable fps
 
 ### HEM Detection Methods
@@ -72,6 +81,7 @@ docker run -p 8421:8421 hem-analyzer
 - **Default ports**: Backend 8421, Frontend 5173 (configurable)
 - **Windows development** - PowerShell script available for frontend
 - **Video codecs** - May need FFmpeg or full opencv-python on Windows
+- **Additional interfaces**: Test pages available for batch analysis and curve viewing
 
 ## File Structure Context
 
@@ -80,6 +90,10 @@ docker run -p 8421:8421 hem-analyzer
 - `frontend/styles.css` - VS Code-themed styling
 - `frontend/serve.py` - Development server with no-cache headers
 - `frontend/index.html` - Main application interface
+- `frontend/curve-viewer.html` - Standalone curve analysis interface
+- `frontend/analyze-csv.html` - CSV data analysis interface
+- `check_syntax.js` - JavaScript syntax validation utility
+- `start-frontend.ps1` - Windows PowerShell frontend server script
 
 ## Frontend Architecture Details
 
@@ -87,12 +101,13 @@ docker run -p 8421:8421 hem-analyzer
 - **Video ROI Selection**: Interactive ROI with two modes:
   - Drag mode: Left-drag to select rectangle
   - Center-point mode: Click to set center with configurable dimensions
-- **Real-time Visualization**: Three analysis curves with toggles:
+- **Real-time Visualization**: Six analysis curves with toggles:
   - Blue (Δv): Current frame ROI mean - historical mean
   - Yellow (d(Δv)): First-order derivative of blue curve
   - White: ROI average grayscale value
   - Pink: ROI standard deviation
   - Purple: High gray value ratio (>130)
+  - Orange: Conditional high gray value ratio (>160 when average >120)
 - **Timeline Navigation**: Interactive timeline with zoom/pan and click-to-scrub
 - **Information Panel**: Shows curve values at clicked timestamps
 - **Batch Processing**: Multi-video analysis with progress tracking
