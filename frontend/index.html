@@ -48,19 +48,53 @@
           </div>
           <div class="section">
             <label class="label">白色曲线波峰检测</label>
-            <div class="peak-controls">
-              <label style="display: block; margin-bottom: 8px;">
-                波峰敏感度:
-                <input type="number" id="peakSensitivity" min="10" max="500" step="10" value="100" style="width: 70px; margin-left: 8px;">
-              </label>
-              <label style="display: block; margin-bottom: 8px;">
-                最小波峰间距:
-                <input type="number" id="peakMinDistance" min="1" max="50" step="1" value="5" style="width: 70px; margin-left: 8px;">
-              </label>
-              <div style="display: flex; gap: 8px; margin-top: 10px;">
-                <button id="detectPeaksBtn" class="detect-btn" disabled>检测波峰</button>
-                <button id="clearPeaksBtn" class="clear-btn-small" disabled>清除波峰</button>
+            <div class="detection-method-section">
+              <label style="display: block; margin-bottom: 8px;">检测方法:</label>
+              <div style="margin-bottom: 10px;">
+                <label style="margin-right: 15px;">
+                  <input type="radio" name="peakMethod" value="morphology" checked> 形态特征
+                </label>
+                <label>
+                  <input type="radio" name="peakMethod" value="threshold"> 绝对阈值
+                </label>
               </div>
+            </div>
+
+            <!-- 形态特征参数 -->
+            <div class="morphology-params peak-controls">
+              <label style="display: block; margin-bottom: 8px;">
+                波峰高度阈值:
+                <input type="number" id="peakSensitivity" min="10" max="200" step="5" value="20" style="width: 70px; margin-left: 8px;">
+              </label>
+              <label style="display: block; margin-bottom: 8px;">
+                最小波峰宽度:
+                <input type="number" id="minPeakWidth" min="2" max="10" step="1" value="3" style="width: 70px; margin-left: 8px;">
+              </label>
+              <label style="display: block; margin-bottom: 8px;">
+                最大波峰宽度:
+                <input type="number" id="maxPeakWidth" min="5" max="30" step="1" value="15" style="width: 70px; margin-left: 8px;">
+              </label>
+              <label style="display: block; margin-bottom: 8px;">
+                波峰最小间距:
+                <input type="number" id="peakMinDistance" min="1" max="20" step="1" value="5" style="width: 70px; margin-left: 8px;">
+              </label>
+            </div>
+
+            <!-- 绝对阈值参数 -->
+            <div class="threshold-params peak-controls" style="display: none; padding: 8px; background: #2a2a2a; border-radius: 4px; margin-top: 10px;">
+              <label style="display: block; margin-bottom: 8px;">
+                绝对阈值 (灰度值):
+                <input type="number" id="absoluteThreshold" min="50" max="200" step="5" value="105" style="width: 70px; margin-left: 8px;">
+              </label>
+              <label style="display: block; margin-bottom: 8px;">
+                基线帧数:
+                <input type="number" id="baselineFrames" min="1" max="20" step="1" value="5" style="width: 70px; margin-left: 8px;">
+              </label>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+              <button id="detectPeaksBtn" class="detect-btn" disabled>检测波峰</button>
+              <button id="clearPeaksBtn" class="clear-btn-small" disabled>清除波峰</button>
             </div>
           </div>
           <!-- Hidden timeline shading parameters (keep functionality, remove UI) -->

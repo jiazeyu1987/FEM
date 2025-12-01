@@ -105,9 +105,16 @@
 
   // Peak detection UI elements
   const peakSensitivityEl = document.getElementById('peakSensitivity');
+  const minPeakWidthEl = document.getElementById('minPeakWidth');
+  const maxPeakWidthEl = document.getElementById('maxPeakWidth');
   const peakMinDistanceEl = document.getElementById('peakMinDistance');
+  const absoluteThresholdEl = document.getElementById('absoluteThreshold');
+  const baselineFramesEl = document.getElementById('baselineFrames');
   const detectPeaksBtn = document.getElementById('detectPeaksBtn');
   const clearPeaksBtn = document.getElementById('clearPeaksBtn');
+  const peakMethodRadios = document.querySelectorAll('input[name="peakMethod"]');
+  const thresholdParamsSection = document.querySelector('.threshold-params');
+  const morphologyParamsSection = document.querySelector('.morphology-params');
 
   const methodsEls = document.querySelectorAll('.method');
   const blueMaxThreshEl = document.getElementById('blue_max_thresh');
@@ -912,74 +919,248 @@ function updateFrameNavigationButtons() {
   if (nextFrameBtn) nextFrameBtn.disabled = false;
 }
 
-// Peak detection functions
-function detectWhiteCurvePeaks(sensitivity = 100, minDistance = 5) {
+// Peak detection functions - Sharp peak detection based on morphological features
+// 使用“相对基线高度”而不是绝对灰度做阈值，增强不同亮度视频上的鲁棒性
+function detectWhiteCurvePeaks(sensitivity = 20, minPeakWidth = 3, maxPeakWidth = 15, minDistance = 5) {
   if (!analyzedSeries || analyzedSeries.length === 0) {
     console.warn('No data available for peak detection');
     return [];
   }
 
-  // Extract white curve data (ROI average grayscale values)
   const whiteCurve = analyzedSeries.map(p => p.roi);
-  const peakIntervals = [];
-
-  // Calculate first derivative using finite differences
-  const derivative = new Array(whiteCurve.length).fill(0);
-  for (let i = 1; i < whiteCurve.length; i++) {
-    derivative[i] = whiteCurve[i] - whiteCurve[i - 1];
+  const finiteVals = whiteCurve.filter(v => Number.isFinite(v));
+  if (!finiteVals.length) {
+    console.warn('No finite ROI values for peak detection');
+    return [];
   }
 
-  // Find peak intervals using first derivative method
-  let inPeak = false;
-  let peakStartIndex = null;
-  let peakMax = -Infinity;
-  let peakMaxIndex = null;
+  // 采用全局中位数作为白色曲线基线，避免少量尖峰拉高均值
+  const sorted = [...finiteVals].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const baseline =
+    sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 
-  for (let i = 1; i < derivative.length; i++) {
-    // Start of peak: derivative changes from <=0 to >0 (start rising)
-    if (!inPeak && derivative[i] > 0 && derivative[i - 1] <= 0) {
-      inPeak = true;
-      peakStartIndex = i;
-      peakMax = whiteCurve[i];
-      peakMaxIndex = i;
-    }
-    // During peak: track maximum value
-    else if (inPeak) {
-      peakMax = Math.max(peakMax, whiteCurve[i]);
-      if (peakMax === whiteCurve[i]) peakMaxIndex = i;
+  console.log('Starting sharp peak detection...');
+  console.log(
+    `Parameters: sensitivity=${sensitivity} (min relative height above baseline), ` +
+      `minPeakWidth=${minPeakWidth}, maxPeakWidth=${maxPeakWidth}, minDistance=${minDistance}`
+  );
+  console.log(
+    `Data length: ${whiteCurve.length}, baseline≈${baseline.toFixed(2)}, ` +
+      `data range: [${Math.min(...finiteVals)}, ${Math.max(...finiteVals)}]`
+  );
 
-      // End of peak: derivative changes from >=0 to <0 (start falling)
-      if (derivative[i] < 0 && derivative[i - 1] >= 0) {
-        const peakEndIndex = i;
+  const peaks = [];
 
-        // Check if peak meets sensitivity threshold (minimum height)
-        if (peakMax >= sensitivity) {
-          // Check minimum distance from previous peak
-          if (peakIntervals.length === 0 ||
-              peakStartIndex - peakIntervals[peakIntervals.length - 1].endIndex >= minDistance) {
+  // Scan through the data looking for local maxima
+  for (let i = minPeakWidth; i < whiteCurve.length - minPeakWidth; i++) {
+    const currentValue = whiteCurve[i];
+    if (!Number.isFinite(currentValue)) continue;
 
-            peakIntervals.push({
-              start: analyzedXs[peakStartIndex] || 0,
-              end: analyzedXs[peakEndIndex] || 0,
-              startIndex: peakStartIndex,
-              endIndex: peakEndIndex,
-              maxValue: peakMax,
-              maxIndex: peakMaxIndex,
-              maxTime: analyzedXs[peakMaxIndex] || 0
-            });
+    // Check if this is a local maximum
+    const isLocalMax =
+      whiteCurve[i] > whiteCurve[i - 1] && whiteCurve[i] > whiteCurve[i + 1];
+
+    // 相对基线的峰高
+    const currentRelHeight = currentValue - baseline;
+
+    // Check if it meets the relative height threshold
+    if (isLocalMax && currentRelHeight >= sensitivity) {
+      // Verify left side shows consistent rise
+      let leftRiseValid = true;
+      let leftRiseAmount = 0;
+      for (let j = 1; j <= minPeakWidth && i - j >= 0; j++) {
+        if (!Number.isFinite(whiteCurve[i - j])) {
+          leftRiseValid = false;
+          break;
+        }
+        if (whiteCurve[i - j] >= whiteCurve[i - j + 1]) {
+          leftRiseValid = false; // Should be rising as we go left to right
+          break;
+        }
+        leftRiseAmount += currentValue - whiteCurve[i - j];
+      }
+
+      // Verify right side shows consistent fall
+      let rightFallValid = true;
+      let rightFallAmount = 0;
+      for (let j = 1; j <= minPeakWidth && i + j < whiteCurve.length; j++) {
+        if (!Number.isFinite(whiteCurve[i + j])) {
+          rightFallValid = false;
+          break;
+        }
+        if (whiteCurve[i + j] >= whiteCurve[i + j - 1]) {
+          rightFallValid = false; // Should be falling as we go left to right
+          break;
+        }
+        rightFallAmount += currentValue - whiteCurve[i + j];
+      }
+
+      // Confirm this is a valid sharp peak
+      if (leftRiseValid && rightFallValid) {
+        console.log(
+          `Potential peak found at index ${i}, value=${currentValue.toFixed(
+            2
+          )}, relHeight=${currentRelHeight.toFixed(
+            2
+          )}, left rise=${leftRiseAmount.toFixed(
+            2
+          )}, right fall=${rightFallAmount.toFixed(2)}`
+        );
+
+        // Determine the full boundaries of the peak
+        let leftBound = Math.max(0, i - minPeakWidth);
+
+        // Extend left boundary as far as the rising trend continues
+        for (let j = i; j > Math.max(0, i - maxPeakWidth); j--) {
+          if (!Number.isFinite(whiteCurve[j])) break;
+          if (j > 0 && whiteCurve[j] <= whiteCurve[j - 1]) {
+            leftBound = j;
+            break;
           }
         }
 
-        inPeak = false;
-        peakStartIndex = null;
-        peakMax = -Infinity;
-        peakMaxIndex = null;
+        let rightBound = Math.min(whiteCurve.length - 1, i + minPeakWidth);
+
+        // Extend right boundary as far as the falling trend continues
+        for (let j = i; j < Math.min(whiteCurve.length, i + maxPeakWidth); j++) {
+          if (!Number.isFinite(whiteCurve[j])) break;
+          if (j < whiteCurve.length - 1 && whiteCurve[j + 1] >= whiteCurve[j]) {
+            rightBound = j;
+            break;
+          }
+        }
+
+        // Calculate peak characteristics
+        const peakWidth = rightBound - leftBound;
+        const peakInfo = {
+          start: analyzedXs[leftBound] || 0,
+          end: analyzedXs[rightBound] || 0,
+          startIndex: leftBound,
+          endIndex: rightBound,
+          maxValue: currentValue,
+          maxIndex: i,
+          maxTime: analyzedXs[i] || 0,
+          baseline: baseline,
+          relativeHeight: currentRelHeight,
+          leftRiseAmount: leftRiseAmount,
+          rightFallAmount: rightFallAmount,
+          peakWidth: peakWidth
+        };
+
+        // Check minimum distance from previous peaks (distance between peak starts)
+        if (peaks.length === 0 || leftBound - peaks[peaks.length - 1].startIndex >= minDistance) {
+          peaks.push(peakInfo);
+          console.log(`Peak confirmed and added: width=${peakWidth}, start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s`);
+        } else {
+          console.log(`Peak rejected - too close to previous peak (distance: ${leftBound - peaks[peaks.length - 1].startIndex} < ${minDistance})`);
+        }
       }
     }
   }
 
-  console.log(`Detected ${peakIntervals.length} peak intervals with sensitivity=${sensitivity}, minDistance=${minDistance}`);
-  return peakIntervals;
+  console.log(`Final result: ${peaks.length} sharp peaks detected`);
+  return peaks;
+}
+
+// Absolute threshold-based peak detection
+function detectWhitePeaksByThreshold(threshold = 105, marginFrames = 5) {
+  if (!analyzedSeries || analyzedSeries.length === 0) {
+    console.warn('No data available for threshold peak detection');
+    return [];
+  }
+
+  const xs = analyzedXs;
+  const v = analyzedSeries.map(p => p.roi);
+  const n = v.length;
+  const peaks = [];
+
+  console.log('Starting threshold-based peak detection...');
+  console.log(`Parameters: threshold=${threshold}, marginFrames=${marginFrames}`);
+  console.log(`Data length: ${n}, data range: [${Math.min(...v)}, ${Math.max(...v)}]`);
+
+  let inSeg = false;
+  let segStart = 0;
+
+  for (let i = 0; i < n; i++) {
+    const above = Number.isFinite(v[i]) && v[i] >= threshold;
+
+    if (above && !inSeg) {
+      // 开始进入波峰区域
+      inSeg = true;
+      segStart = i;
+      console.log(`Entering peak region at index ${i}, value ${v[i].toFixed(2)}, threshold ${threshold}`);
+    } else if (!above && inSeg) {
+      // 刚刚离开波峰区域，收尾
+      const segEnd = i - 1;
+      console.log(`Leaving peak region at index ${segEnd}, value ${v[segEnd].toFixed(2)}`);
+
+      const startIndex = Math.max(0, segStart - marginFrames);
+      const endIndex = Math.min(n - 1, segEnd + marginFrames);
+
+      const segmentValues = v.slice(segStart, segEnd + 1);
+      const maxValue = Math.max(...segmentValues);
+      const maxIndex = segStart + segmentValues.indexOf(maxValue);
+      const segmentDuration = xs[segEnd] - xs[segStart];
+
+      const peakInfo = {
+        start: xs[startIndex] || 0,
+        end: xs[endIndex] || 0,
+        startIndex: startIndex,
+        endIndex: endIndex,
+        maxValue: maxValue,
+        maxIndex: maxIndex,
+        maxTime: xs[maxIndex] || 0,
+        method: 'threshold',
+        threshold: threshold,
+        marginFrames: marginFrames,
+        segmentDuration: segmentDuration,
+        segmentStartIndex: segStart,
+        segmentEndIndex: segEnd,
+        segmentValues: segmentValues.length
+      };
+
+      peaks.push(peakInfo);
+      console.log(`Peak added: start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, max=${peakInfo.maxValue.toFixed(2)}`);
+
+      inSeg = false;
+    }
+  }
+
+  // 如果一直到结尾还在波峰区域
+  if (inSeg) {
+    const segEnd = n - 1;
+    const startIndex = Math.max(0, segStart - marginFrames);
+    const endIndex = segEnd;
+
+    const segmentValues = v.slice(segStart, segEnd + 1);
+    const maxValue = Math.max(...segmentValues);
+    const maxIndex = segStart + segmentValues.indexOf(maxValue);
+    const segmentDuration = xs[segEnd] - xs[segStart];
+
+    const peakInfo = {
+      start: xs[startIndex] || 0,
+      end: xs[endIndex] || 0,
+      startIndex: startIndex,
+      endIndex: endIndex,
+      maxValue: maxValue,
+      maxIndex: maxIndex,
+      maxTime: xs[maxIndex] || 0,
+      method: 'threshold',
+      threshold: threshold,
+      marginFrames: marginFrames,
+      segmentDuration: segmentDuration,
+      segmentStartIndex: segStart,
+      segmentEndIndex: segEnd,
+      segmentValues: segmentValues.length
+    };
+
+    peaks.push(peakInfo);
+    console.log(`Final peak added: start=${peakInfo.start.toFixed(2)}s, end=${peakInfo.end.toFixed(2)}s, max=${peakInfo.maxValue.toFixed(2)}`);
+  }
+
+  console.log(`Final result: ${peaks.length} threshold peaks detected`);
+  return peaks;
 }
 
 function clearTimelineMarkers() {
@@ -995,11 +1176,33 @@ function updatePeakDetection() {
     return;
   }
 
-  const sensitivity = Number(peakSensitivityEl.value);
-  const minDistance = Number(peakMinDistanceEl.value);
+  const selectedMethod = document.querySelector('input[name="peakMethod"]:checked').value;
 
-  // Detect peak intervals
-  detectedPeaks = detectWhiteCurvePeaks(sensitivity, minDistance);
+  if (selectedMethod === 'threshold') {
+    // 绝对阈值方法
+    const threshold = Number(absoluteThresholdEl.value);
+    const marginFrames = Number(baselineFramesEl.value);
+
+    console.log('Using threshold-based peak detection method:');
+    console.log(`Threshold: ${threshold}, Margin frames: ${marginFrames}`);
+
+    detectedPeaks = detectWhitePeaksByThreshold(threshold, marginFrames);
+
+    statusEl.textContent = `绝对阈值法检测到 ${detectedPeaks.length} 个波峰区间`;
+  } else {
+    // 形态特征方法（保留原有算法）
+    const sensitivity = Number(peakSensitivityEl.value);
+    const minPeakWidth = Number(minPeakWidthEl.value);
+    const maxPeakWidth = Number(maxPeakWidthEl.value);
+    const minDistance = Number(peakMinDistanceEl.value);
+
+    console.log('Using morphological feature-based peak detection method:');
+    console.log(`Sensitivity: ${sensitivity}, MinPeakWidth: ${minPeakWidth}, MaxPeakWidth: ${maxPeakWidth}, MinDistance: ${minDistance}`);
+
+    detectedPeaks = detectWhiteCurvePeaks(sensitivity, minPeakWidth, maxPeakWidth, minDistance);
+
+    statusEl.textContent = `形态检测法检测到 ${detectedPeaks.length} 个尖锐波峰`;
+  }
 
   // Clear existing timeline markers
   clearTimelineMarkers();
@@ -1007,11 +1210,34 @@ function updatePeakDetection() {
   // Update timeline to show peak intervals
   renderTimeline();
 
-  // Update UI
+  // Update UI with detailed results
   if (detectedPeaks.length > 0) {
-    statusEl.textContent = `检测到 ${detectedPeaks.length} 个波峰区间`;
+    console.log('=== Peak Detection Results ===');
+    detectedPeaks.forEach((peak, index) => {
+      if (peak.method === 'threshold') {
+        console.log(`Peak ${index + 1}: ${peak.start.toFixed(2)}-${peak.end.toFixed(2)}s, max=${peak.maxValue.toFixed(2)}, threshold=${peak.threshold}, margin=${peak.marginFrames}`);
+      } else {
+        console.log(`Peak ${index + 1}: ${peak.start.toFixed(2)}-${peak.end.toFixed(2)}s, max=${peak.maxValue.toFixed(2)}, width=${peak.peakWidth}`);
+      }
+    });
+
+    console.log(`Detection method: ${selectedMethod}`);
+    console.log(`Total peaks detected: ${detectedPeaks.length}`);
   } else {
-    statusEl.textContent = '未检测到波峰区间';
+    if (selectedMethod === 'threshold') {
+      const threshold = Number(absoluteThresholdEl.value);
+      statusEl.textContent = '未检测到符合条件的波峰区间';
+      console.log('No peaks detected with threshold method. Consider adjusting:');
+      console.log(`- Lower threshold value (current: ${threshold})`);
+      console.log(`- Adjust margin frames (current: ${Number(baselineFramesEl.value)})`);
+    } else {
+      const sensitivity = Number(peakSensitivityEl.value);
+      const minPeakWidth = Number(minPeakWidthEl.value);
+      statusEl.textContent = '未检测到符合条件的尖锐波峰';
+      console.log('No peaks detected with morphology method. Consider adjusting:');
+      console.log(`- Lower sensitivity threshold (current: ${sensitivity})`);
+      console.log(`- Adjust min peak width (current: ${minPeakWidth})`);
+    }
   }
 
   // Update button states
@@ -3070,6 +3296,31 @@ function clearPeaks() {
   if (clearPeaksBtn) {
     clearPeaksBtn.addEventListener('click', () => {
       clearPeaks();
+    });
+  }
+
+  // Peak detection method switching
+  if (peakMethodRadios && peakMethodRadios.length > 0) {
+    peakMethodRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        const selectedMethod = radio.value;
+        const isThreshold = selectedMethod === 'threshold';
+
+        // Show/hide parameter sections
+        if (thresholdParamsSection) {
+          thresholdParamsSection.style.display = isThreshold ? 'block' : 'none';
+        }
+        if (morphologyParamsSection) {
+          morphologyParamsSection.style.display = isThreshold ? 'none' : 'block';
+        }
+
+        // Update button text to reflect current method
+        if (detectPeaksBtn) {
+          detectPeaksBtn.textContent = isThreshold ? '检测波峰 (阈值法)' : '检测波峰';
+        }
+
+        console.log(`Switched to ${selectedMethod} peak detection method`);
+      });
     });
   }
 

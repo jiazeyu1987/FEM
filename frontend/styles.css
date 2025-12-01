@@ -179,3 +179,61 @@ tbody tr:hover{background:#0b1220}
 .detect-btn:hover:not(:disabled){background:#059669}
 .clear-btn-small{background:#6b7280;color:white;border-color:#4b5563;font-size:11px;padding:6px 8px}
 .clear-btn-small:hover:not(:disabled){background:#4b5563}
+
+/* Peak Detection Method Selection */
+.detection-method-section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detection-method-section label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.detection-method-section input[type="radio"] {
+  margin-right: 6px;
+  margin-bottom: 4px;
+}
+
+.detection-method-section label.radio-label {
+  display: inline;
+  font-size: 11px;
+  color: var(--text);
+  margin-right: 15px;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+.detection-method-section label.radio-label:hover {
+  color: #10b981;
+}
+
+.threshold-params {
+  margin-top: 10px;
+  padding: 12px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.threshold-params label {
+  display: block;
+  font-size: 11px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+.threshold-params input[type="number"] {
+  background: #1a1a1a;
+  border: 1px solid #555;
+  color: #fff;
+}
+
+.threshold-params input[type="number"]:focus {
+  border-color: #10b981;
+  outline: none;
+}
