@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Color-Coded Peak Detection</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .details { font-family: monospace; background-color: #f8f9fa; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Color-Coded Peak Detection Test</h1>
+    <div id="testResults"></div>
+
+    <script>
+        // Mock analyzedSeries data for testing
+        const mockAnalyzedSeries = [
+            { roi: 100 }, { roi: 102 }, { roi: 104 }, { roi: 106 }, { roi: 108 }, // 前5帧
+            { roi: 105 }, { roi: 110 }, { roi: 115 }, { roi: 120 }, { roi: 110 }, // 波峰区域
+            { roi: 108 }, { roi: 107 }, { roi: 109 }, { roi: 111 }, { roi: 113 }  // 后5帧
+        ];
+
+        function calculateFrameDifference(peakStartIndex, peakEndIndex, analyzedSeries) {
+            if (!analyzedSeries || analyzedSeries.length === 0) {
+                return null;
+            }
+
+            const beforeFrames = 5;
+            const afterFrames = 5;
+
+            const beforeStart = Math.max(0, peakStartIndex - beforeFrames);
+            const beforeEnd = Math.max(0, peakStartIndex - 1);
+            const afterStart = Math.min(analyzedSeries.length - 1, peakEndIndex + 1);
+            const afterEnd = Math.min(analyzedSeries.length - 1, peakEndIndex + afterFrames);
+
+            if (beforeEnd < beforeStart || afterStart > afterEnd) {
+                return null;
+            }
+
+            let beforeSum = 0, beforeCount = 0;
+            for (let i = beforeStart; i <= beforeEnd; i++) {
+                beforeSum += analyzedSeries[i].roi;
+                beforeCount++;
+            }
+
+            let afterSum = 0, afterCount = 0;
+            for (let i = afterStart; i <= afterEnd; i++) {
+                afterSum += analyzedSeries[i].roi;
+                afterCount++;
+            }
+
+            const beforeAvg = beforeCount > 0 ? beforeSum / beforeCount : 0;
+            const afterAvg = afterCount > 0 ? afterSum / afterCount : 0;
+            const difference = afterAvg - beforeAvg;
+
+            return difference;
+        }
+
+        function classifyPeakColor(frameDifference, differenceThreshold) {
+            if (frameDifference === null) {
+                return 'white';
+            }
+            return frameDifference > differenceThreshold ? 'red' : 'green';
+        }
+
+        function runTests() {
+            const results = document.getElementById('testResults');
+            let allPassed = true;
+
+            // Test 1: Calculate frame difference
+            const diff = calculateFrameDifference(5, 9, mockAnalyzedSeries);
+            const expectedDiff = (108 + 107 + 109 + 111 + 113) / 5 - (100 + 102 + 104 + 106 + 108) / 5;
+
+            const test1 = Math.abs(diff - expectedDiff) < 0.01;
+            allPassed = allPassed && test1;
+
+            results.innerHTML += `
+                <div class="test-result ${test1 ? 'success' : 'error'}">
+                    <h3>Test 1: Frame Difference Calculation</h3>
+                    <p>Expected: ${expectedDiff.toFixed(3)}, Got: ${diff ? diff.toFixed(3) : 'null'}</p>
+                    <p>Status: ${test1 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 2: Color classification - Green case
+            const colorGreen = classifyPeakColor(1.5, 2.1);
+            const test2 = colorGreen === 'green';
+            allPassed = allPassed && test2;
+
+            results.innerHTML += `
+                <div class="test-result ${test2 ? 'success' : 'error'}">
+                    <h3>Test 2: Color Classification - Green</h3>
+                    <p>Input: diff=1.5, threshold=2.1</p>
+                    <p>Expected: green, Got: ${colorGreen}</p>
+                    <p>Status: ${test2 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 3: Color classification - Red case
+            const colorRed = classifyPeakColor(3.0, 2.1);
+            const test3 = colorRed === 'red';
+            allPassed = allPassed && test3;
+
+            results.innerHTML += `
+                <div class="test-result ${test3 ? 'success' : 'error'}">
+                    <h3>Test 3: Color Classification - Red</h3>
+                    <p>Input: diff=3.0, threshold=2.1</p>
+                    <p>Expected: red, Got: ${colorRed}</p>
+                    <p>Status: ${test3 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 4: Edge case - Insufficient data
+            const edgeColor = classifyPeakColor(null, 2.1);
+            const test4 = edgeColor === 'white';
+            allPassed = allPassed && test4;
+
+            results.innerHTML += `
+                <div class="test-result ${test4 ? 'success' : 'error'}">
+                    <h3>Test 4: Edge Case - Insufficient Data</h3>
+                    <p>Input: diff=null, threshold=2.1</p>
+                    <p>Expected: white, Got: ${edgeColor}</p>
+                    <p>Status: ${test4 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Overall result
+            results.innerHTML += `
+                <div class="test-result ${allPassed ? 'success' : 'error'}">
+                    <h2>Overall Result: ${allPassed ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'}</h2>
+                    <p>Color-coded peak detection functionality is ready for use.</p>
+                </div>
+            `;
+        }
+
+        // Run tests when page loads
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

@@ -95,6 +95,16 @@ docker run -p 8421:8421 hem-analyzer
 - `check_syntax.js` - JavaScript syntax validation utility
 - `start-frontend.ps1` - Windows PowerShell frontend server script
 
+### Legacy System (OldFEM)
+- `OldFEM/` - Previous generation HEM Analyzer with screen-capture based analysis
+- `OldFEM/server.py` - TCP server for real-time image processing (port 30415)
+- `OldFEM/ocr_detect.py` - OCR functionality using PaddleOCR for measurement extraction
+- `OldFEM/treat_compare_img.py` - Treatment comparison with real-time screenshot capture
+- `OldFEM/image_difference.py` - Advanced image difference detection with multiple filters
+- `OldFEM/Analysis.py` - 3D trajectory analysis for Aimooe dual-camera coordinate data
+- `OldFEM/settings` - JSON configuration file with GPU support and thresholds
+- `OldFEM/screenshots/` - Test images and historical data for algorithm validation
+
 ## Frontend Architecture Details
 
 ### Core Components
@@ -141,3 +151,38 @@ docker run -p 8421:8421 hem-analyzer
 - `threshold_delta`: Threshold detection offset
 - `threshold_hold`: Minimum duration for threshold detection
 - `relative_delta`: Relative detection threshold
+
+## Legacy System (OldFEM)
+
+### Overview
+The `OldFEM/` directory contains the previous generation HEM Analyzer, which represents the evolutionary foundation of the current web-based system. This legacy implementation pioneered the core HEM detection algorithms using a screen-capture approach rather than video file processing.
+
+### Architecture and Evolution
+- **Original Approach**: Real-time screen capture from ultrasound displays with OCR for parameter extraction
+- **Current Approach**: Web-based video upload with flexible ROI selection and REST API
+- **Progression**: From specialized hardware-dependent system to generic video processing platform
+
+### Key Legacy Technologies
+- **OCR Integration**: PaddleOCR for real-time measurement extraction (Chinese/English)
+- **TCP Server-Client**: Network communication (port 30415) for remote control
+- **GPU Acceleration**: CUDA support with NVIDIA GPU monitoring
+- **Advanced Image Processing**: Multiple filtering techniques (median, Gaussian, bilateral, wavelet)
+- **Real-time Monitoring**: Continuous screenshot capture and grayscale analysis
+
+### Algorithm Heritage
+Many current detection methods evolved from OldFEM research:
+- **Grayscale Monitoring**: Legacy real-time pixel analysis informed current video-based ROI analysis
+- **Image Difference Detection**: Multi-filter approach evolved into current HEM event detection algorithms
+- **Treatment Detection**: Before/after comparison logic adapted for video timeline analysis
+
+### Development Reference
+- **Algorithm Insights**: Reference `OldFEM/image_difference.py` for advanced filtering techniques
+- **Test Data**: Use `OldFEM/screenshots/` for algorithm validation and historical comparison
+- **Configuration**: `OldFEM/settings` provides baseline parameters and thresholds
+- **3D Analysis**: `OldFEM/Analysis.py` contains trajectory analysis for coordinate-based studies
+
+### Legacy Capabilities No Longer in Current System
+- Real-time OCR of ultrasound measurements
+- Direct hardware integration via screen capture
+- TCP-based remote control interface
+- Automated treatment detection with freeze detection

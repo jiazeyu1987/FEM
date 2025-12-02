@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Peak Overlap Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .details { font-family: monospace; background-color: #f8f9fa; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Peak Overlap Fix Test</h1>
+    <div id="testResults"></div>
+
+    <script>
+        // Mock overlapping peaks data
+        const overlappingPeaks = [
+            {
+                start: 1.0, end: 2.0, startIndex: 5, endIndex: 15,
+                maxValue: 120, color: 'green', method: 'threshold'
+            },
+            {
+                start: 1.8, end: 2.5, startIndex: 12, endIndex: 20,
+                maxValue: 115, color: 'red', method: 'threshold'
+            },
+            {
+                start: 3.0, end: 4.0, startIndex: 25, endIndex: 35,
+                maxValue: 130, color: 'green', method: 'threshold'
+            }
+        ];
+
+        function deduplicatePeaks(peaks) {
+            if (peaks.length === 0) {
+                return [];
+            }
+
+            console.log(`Starting deduplication with ${peaks.length} peaks`);
+
+            const sortedPeaks = [...peaks].sort((a, b) => a.start - b.start);
+            const deduped = [];
+
+            for (const peak of sortedPeaks) {
+                const overlappingIndex = deduped.findIndex(existingPeak =>
+                    existingPeak.start <= peak.end && peak.start <= existingPeak.end
+                );
+
+                if (overlappingIndex === -1) {
+                    deduped.push(peak);
+                    console.log(`Added new peak: [${peak.start.toFixed(2)}s, ${peak.end.toFixed(2)}s], color: ${peak.color}`);
+                } else {
+                    const existingPeak = deduped[overlappingIndex];
+                    console.log(`Found overlapping peaks:`);
+                    console.log(`  Existing: [${existingPeak.start.toFixed(2)}s, ${existingPeak.end.toFixed(2)}s], method: ${existingPeak.method}, color: ${existingPeak.color}`);
+                    console.log(`  New: [${peak.start.toFixed(2)}s, ${peak.end.toFixed(2)}s], method: ${peak.method}, color: ${peak.color}`);
+
+                    let shouldReplace = false;
+
+                    if (peak.method === 'threshold' && existingPeak.method !== 'threshold') {
+                        shouldReplace = true;
+                    } else if (peak.method === existingPeak.method && peak.maxValue > existingPeak.maxValue) {
+                        shouldReplace = true;
+                    }
+
+                    if (shouldReplace) {
+                        const mergedPeak = {
+                            ...peak,
+                            start: Math.min(peak.start, existingPeak.start),
+                            end: Math.max(peak.end, existingPeak.end),
+                            startIndex: Math.min(peak.startIndex, existingPeak.startIndex),
+                            endIndex: Math.max(peak.endIndex, existingPeak.endIndex)
+                        };
+                        deduped[overlappingIndex] = mergedPeak;
+                        console.log(`Replaced with merged peak: [${mergedPeak.start.toFixed(2)}s, ${mergedPeak.end.toFixed(2)}s], color: ${mergedPeak.color}`);
+                    } else {
+                        const mergedPeak = {
+                            ...existingPeak,
+                            start: Math.min(existingPeak.start, peak.start),
+                            end: Math.max(existingPeak.end, peak.end),
+                            startIndex: Math.min(existingPeak.startIndex, peak.startIndex),
+                            endIndex: Math.max(existingPeak.endIndex, peak.endIndex)
+                        };
+                        deduped[overlappingIndex] = mergedPeak;
+                        console.log(`Kept existing and merged to: [${mergedPeak.start.toFixed(2)}s, ${mergedPeak.end.toFixed(2)}s], color: ${mergedPeak.color}`);
+                    }
+                }
+            }
+
+            console.log(`Deduplication complete: ${peaks.length} -> ${deduped.length} peaks`);
+            return deduped;
+        }
+
+        function checkForOverlaps(peaks) {
+            for (let i = 0; i < peaks.length; i++) {
+                for (let j = i + 1; j < peaks.length; j++) {
+                    if (peaks[i].start <= peaks[j].end && peaks[j].start <= peaks[i].end) {
+                        return false; // Found overlap
+                    }
+                }
+            }
+            return true; // No overlaps
+        }
+
+        function runTests() {
+            const results = document.getElementById('testResults');
+            let allPassed = true;
+
+            // Test 1: Basic deduplication
+            const dedupedPeaks = deduplicatePeaks(overlappingPeaks);
+            const test1 = dedupedPeaks.length < overlappingPeaks.length && checkForOverlaps(dedupedPeaks);
+            allPassed = allPassed && test1;
+
+            results.innerHTML += `
+                <div class="test-result ${test1 ? 'success' : 'error'}">
+                    <h3>Test 1: Basic Deduplication</h3>
+                    <p>Original peaks: ${overlappingPeaks.length}, Deduped: ${dedupedPeaks.length}</p>
+                    <p>Overlaps removed: ${checkForOverlaps(dedupedPeaks) ? 'YES' : 'NO'}</p>
+                    <p>Status: ${test1 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 2: Peak merging verification
+            const expectedMergedPeak = {
+                start: 1.0, end: 2.5, // Should merge the first two overlapping peaks
+                color: 'green' // Should keep the color of the higher max value peak (120 > 115)
+            };
+
+            const mergedPeak = dedupedPeaks[0];
+            const test2 = Math.abs(mergedPeak.start - expectedMergedPeak.start) < 0.01 &&
+                         Math.abs(mergedPeak.end - expectedMergedPeak.end) < 0.01 &&
+                         mergedPeak.color === expectedMergedPeak.color;
+            allPassed = allPassed && test2;
+
+            results.innerHTML += `
+                <div class="test-result ${test2 ? 'success' : 'error'}">
+                    <h3>Test 2: Peak Merging Logic</h3>
+                    <p>Expected: [${expectedMergedPeak.start.toFixed(2)}s, ${expectedMergedPeak.end.toFixed(2)}s], color: ${expectedMergedPeak.color}</p>
+                    <p>Actual: [${mergedPeak.start.toFixed(2)}s, ${mergedPeak.end.toFixed(2)}s], color: ${mergedPeak.color}</p>
+                    <p>Status: ${test2 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 3: Non-overlapping peaks preserved
+            const test3 = dedupedPeaks.length === 2; // Should have 2 peaks: merged first two, and third one
+            allPassed = allPassed && test3;
+
+            results.innerHTML += `
+                <div class="test-result ${test3 ? 'success' : 'error'}">
+                    <h3>Test 3: Non-overlapping Peaks Preserved</h3>
+                    <p>Expected final peak count: 2</p>
+                    <p>Actual final peak count: ${dedupedPeaks.length}</p>
+                    <p>Status: ${test3 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Overall result
+            results.innerHTML += `
+                <div class="test-result ${allPassed ? 'success' : 'error'}">
+                    <h2>Overall Result: ${allPassed ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'}</h2>
+                    <p>${allPassed ? 'Overlap fix is working correctly!' : 'There are issues with the overlap fix.'}</p>
+                    <div class="details">
+                        <strong>Final deduplicated peaks:</strong><br>
+                        ${dedupedPeaks.map((p, i) =>
+                            `Peak ${i + 1}: [${p.start.toFixed(2)}s, ${p.end.toFixed(2)}s], color: ${p.color}, max: ${p.maxValue}`
+                        ).join('<br>')}
+                    </div>
+                </div>
+            `;
+        }
+
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

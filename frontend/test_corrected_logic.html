@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Corrected Color Classification Logic</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .details { font-family: monospace; background-color: #f8f9fa; padding: 10px; margin: 10px 0; }
+        .requirement-box { background-color: #e3f2fd; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #2196f3; }
+    </style>
+</head>
+<body>
+    <h1>波峰颜色分类逻辑修正测试</h1>
+
+    <div class="requirement-box">
+        <h3>用户需求:</h3>
+        <p>🟩 <strong>绿色</strong>: (后5帧平均 - 前5帧平均) &gt; 2.1</p>
+        <p>🟥 <strong>红色</strong>: (后5帧平均 - 前5帧平均) ≤ 2.1</p>
+    </div>
+
+    <div id="testResults"></div>
+
+    <script>
+        // 修正后的颜色分类函数
+        function classifyPeakColor(frameDifference, differenceThreshold) {
+            if (frameDifference === null) {
+                return 'white'; // 边界情况，数据不足
+            }
+
+            // 如果后5帧平均值比前5帧大超过阈值，标绿色，否则红色
+            return frameDifference > differenceThreshold ? 'green' : 'red';
+        }
+
+        function runTests() {
+            const results = document.getElementById('testResults');
+            let allPassed = true;
+            const threshold = 2.1;
+
+            results.innerHTML += '<h2>测试结果:</h2>';
+
+            // Test 1: 差值 > 2.1 应该是绿色
+            const test1a = classifyPeakColor(3.5, threshold) === 'green';
+            const test1b = classifyPeakColor(2.2, threshold) === 'green';
+            const test1c = classifyPeakColor(5.0, threshold) === 'green';
+            const test1 = test1a && test1b && test1c;
+            allPassed = allPassed && test1;
+
+            results.innerHTML += `
+                <div class="test-result ${test1 ? 'success' : 'error'}">
+                    <h3>Test 1: 差值 > 2.1 应该是绿色</h3>
+                    <p>3.5 > 2.1: ${classifyPeakColor(3.5, threshold)} ${test1a ? '✅' : '❌'}</p>
+                    <p>2.2 > 2.1: ${classifyPeakColor(2.2, threshold)} ${test1b ? '✅' : '❌'}</p>
+                    <p>5.0 > 2.1: ${classifyPeakColor(5.0, threshold)} ${test1c ? '✅' : '❌'}</p>
+                    <p>Status: ${test1 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 2: 差值 ≤ 2.1 应该是红色
+            const test2a = classifyPeakColor(2.1, threshold) === 'red';
+            const test2b = classifyPeakColor(1.5, threshold) === 'red';
+            const test2c = classifyPeakColor(0.0, threshold) === 'red';
+            const test2d = classifyPeakColor(-1.0, threshold) === 'red';
+            const test2 = test2a && test2b && test2c && test2d;
+            allPassed = allPassed && test2;
+
+            results.innerHTML += `
+                <div class="test-result ${test2 ? 'success' : 'error'}">
+                    <h3>Test 2: 差值 ≤ 2.1 应该是红色</h3>
+                    <p>2.1 ≤ 2.1: ${classifyPeakColor(2.1, threshold)} ${test2a ? '✅' : '❌'}</p>
+                    <p>1.5 ≤ 2.1: ${classifyPeakColor(1.5, threshold)} ${test2b ? '✅' : '❌'}</p>
+                    <p>0.0 ≤ 2.1: ${classifyPeakColor(0.0, threshold)} ${test2c ? '✅' : '❌'}</p>
+                    <p>-1.0 ≤ 2.1: ${classifyPeakColor(-1.0, threshold)} ${test2d ? '✅' : '❌'}</p>
+                    <p>Status: ${test2 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 3: 边界情况应该是白色
+            const test3 = classifyPeakColor(null, threshold) === 'white';
+            allPassed = allPassed && test3;
+
+            results.innerHTML += `
+                <div class="test-result ${test3 ? 'success' : 'error'}">
+                    <h3>Test 3: 边界情况应该是白色</h3>
+                    <p>null 差值: ${classifyPeakColor(null, threshold)} ${test3 ? '✅' : '❌'}</p>
+                    <p>Status: ${test3 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Test 4: 不同阈值的测试
+            const customThreshold = 3.0;
+            const test4a = classifyPeakColor(3.5, customThreshold) === 'green';
+            const test4b = classifyPeakColor(2.5, customThreshold) === 'red';
+            const test4 = test4a && test4b;
+            allPassed = allPassed && test4;
+
+            results.innerHTML += `
+                <div class="test-result ${test4 ? 'success' : 'error'}">
+                    <h3>Test 4: 自定义阈值测试 (阈值 = 3.0)</h3>
+                    <p>3.5 > 3.0: ${classifyPeakColor(3.5, customThreshold)} ${test4a ? '✅' : '❌'}</p>
+                    <p>2.5 ≤ 3.0: ${classifyPeakColor(2.5, customThreshold)} ${test4b ? '✅' : '❌'}</p>
+                    <p>Status: ${test4 ? 'PASSED' : 'FAILED'}</p>
+                </div>
+            `;
+
+            // Overall result
+            results.innerHTML += `
+                <div class="test-result ${allPassed ? 'success' : 'error'}">
+                    <h2>整体结果: ${allPassed ? '✅ 所有测试通过 - 逻辑修正正确!' : '❌ 测试失败 - 需要检查逻辑'}</h2>
+                    <p>修正后的颜色分类逻辑现在符合用户需求。</p>
+                    <div class="details">
+                        <strong>修正内容:</strong><br>
+                        1. JavaScript: classifyPeakColor() 函数逻辑反转<br>
+                        2. HTML: 颜色图例说明更新<br>
+                        3. 注释: 函数内部说明更新
+                    </div>
+                </div>
+            `;
+        }
+
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

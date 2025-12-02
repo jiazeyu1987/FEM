@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Real-time Threshold Updates</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-container { padding: 20px; border: 1px solid #ccc; margin: 10px 0; border-radius: 5px; }
+        .parameter-group { margin: 15px 0; }
+        label { display: block; margin: 5px 0; font-weight: bold; }
+        input[type="number"] { padding: 5px; margin: 5px 0; border: 1px solid #999; border-radius: 3px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; background-color: #f0f0f0; }
+        .peak-visualization { height: 60px; border: 1px solid #ccc; margin: 10px 0; position: relative; overflow: hidden; }
+        .peak { position: absolute; height: 100%; border: 2px solid; }
+        .peak.green { background-color: rgba(16, 185, 129, 0.3); border-color: rgba(16, 185, 129, 0.8); }
+        .peak.red { background-color: rgba(248, 113, 113, 0.3); border-color: rgba(248, 113, 113, 0.8); }
+        .peak-label { position: absolute; top: 5px; left: 5px; font-size: 10px; color: #333; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Real-time Threshold Updates Test</h1>
+
+    <div class="test-container">
+        <h2>Parameter Controls</h2>
+
+        <div class="parameter-group">
+            <label for="differenceThreshold">帧差值阈值 (颜色判定):</label>
+            <input type="number" id="differenceThreshold" min="0.5" max="10.0" step="0.1" value="2.1">
+            <span id="diffValue">2.1</span>
+        </div>
+
+        <div class="parameter-group">
+            <label for="absoluteThreshold">绝对阈值 (灰度值):</label>
+            <input type="number" id="absoluteThreshold" min="50" max="200" step="5" value="105">
+            <span id="absValue">105</span>
+        </div>
+
+        <div class="status" id="status">
+            Ready to test real-time updates
+        </div>
+
+        <h3>Peak Visualization</h3>
+        <div id="peakVisualization" class="peak-visualization"></div>
+
+        <div class="test-container">
+            <h3>Test Instructions</h3>
+            <ol>
+                <li>Adjust the "帧差值阈值" parameter above</li>
+                <li>Watch how peak colors change in real-time</li>
+                <li>Green peaks: frame difference ≤ threshold (stable)</li>
+                <li>Red peaks: frame difference > threshold (unstable)</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Mock peak data with different frame differences
+        const mockPeaks = [
+            { start: 10, width: 40, frameDiff: 1.5, maxValue: 120, color: 'green' },
+            { start: 60, width: 30, frameDiff: 3.2, maxValue: 135, color: 'red' },
+            { start: 100, width: 35, frameDiff: 2.8, maxValue: 125, color: 'red' },
+            { start: 145, width: 25, frameDiff: 0.9, maxValue: 118, color: 'green' },
+            { start: 180, width: 45, frameDiff: 4.1, maxValue: 140, color: 'red' }
+        ];
+
+        // DOM elements
+        const diffThresholdEl = document.getElementById('differenceThreshold');
+        const absThresholdEl = document.getElementById('absoluteThreshold');
+        const diffValueEl = document.getElementById('diffValue');
+        const statusEl = document.getElementById('status');
+        const visualizationEl = document.getElementById('peakVisualization');
+
+        // Update function
+        function updatePeakColors() {
+            const threshold = Number(diffThresholdEl.value);
+            let greenCount = 0;
+            let redCount = 0;
+
+            // Clear visualization
+            visualizationEl.innerHTML = '';
+
+            // Recalculate colors and render peaks
+            mockPeaks.forEach((peak, index) => {
+                // Recalculate color based on current threshold
+                const newColor = peak.frameDiff > threshold ? 'red' : 'green';
+
+                if (newColor === 'green') greenCount++;
+                else redCount++;
+
+                // Create peak element
+                const peakEl = document.createElement('div');
+                peakEl.className = `peak ${newColor}`;
+                peakEl.style.left = `${peak.start}px`;
+                peakEl.style.width = `${peak.width}px`;
+
+                // Add label
+                const labelEl = document.createElement('div');
+                labelEl.className = 'peak-label';
+                labelEl.textContent = `Δ${peak.frameDiff.toFixed(1)}`;
+                peakEl.appendChild(labelEl);
+
+                visualizationEl.appendChild(peakEl);
+            });
+
+            // Update status
+            statusEl.innerHTML = `
+                <strong>Threshold: ${threshold}</strong><br>
+                Green peaks: ${greenCount} (stable)<br>
+                Red peaks: ${redCount} (unstable)<br>
+                <em>Real-time updates: ✅ Active</em>
+            `;
+        }
+
+        // Event listeners for real-time updates
+        diffThresholdEl.addEventListener('input', (e) => {
+            const value = e.target.value;
+            diffValueEl.textContent = value;
+            console.log(`Difference threshold changed to: ${value}`);
+
+            // Simulate real-time update
+            updatePeakColors();
+        });
+
+        absThresholdEl.addEventListener('input', (e) => {
+            const value = e.target.value;
+            document.getElementById('absValue').textContent = value;
+            console.log(`Absolute threshold changed to: ${value}`);
+
+            // In real app, this would trigger re-detection
+            statusEl.innerHTML += `<br><em>Absolute threshold changed to ${value} (would trigger re-detection)</em>`;
+        });
+
+        // Initialize visualization
+        updatePeakColors();
+
+        // Auto-update display values
+        diffValueEl.textContent = diffThresholdEl.value;
+        document.getElementById('absValue').textContent = absThresholdEl.value;
+
+        console.log('Real-time threshold update test initialized');
+    </script>
+</body>
+</html>
