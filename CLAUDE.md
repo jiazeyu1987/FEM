@@ -73,6 +73,27 @@ docker run -p 8421:8421 hem-analyzer
   - `methods`: Detection methods (`sudden,threshold,relative`)
   - Optional parameters: `smooth_k`, `baseline_n`, `sudden_k`, `sudden_min`, `threshold_delta`, `threshold_hold`, `relative_delta`
 
+#### Response Format
+```json
+{
+  "has_hem": true,
+  "events": [
+    {"t": 1.25, "type": "sudden", "score": 12.3},
+    {"t": 2.15, "type": "threshold", "score": 8.7}
+  ],
+  "baseline": 42.0,
+  "series": [
+    {"t": 0.0, "roi": 40.1, "ref": 38.9},
+    {"t": 0.125, "roi": 41.2, "ref": 39.1}
+  ]
+}
+```
+
+### Data Flow Architecture
+1. **Frontend**: Video upload → ROI selection → Parameter configuration → API request
+2. **Backend**: Video decoding → Frame sampling → ROI analysis → HEM detection → JSON response
+3. **Visualization**: Six curves rendered on canvas with interactive timeline and event markers
+
 ## Important Development Notes
 
 - **No build process** - Frontend is truly static
@@ -83,17 +104,60 @@ docker run -p 8421:8421 hem-analyzer
 - **Video codecs** - May need FFmpeg or full opencv-python on Windows
 - **Additional interfaces**: Test pages available for batch analysis and curve viewing
 
+## Development Patterns and Troubleshooting
+
+### Common Development Tasks
+
+#### Video Codec Issues on Windows
+If OpenCV cannot decode MP4 files on Windows:
+```bash
+# Install full OpenCV with system codecs
+pip uninstall opencv-python-headless
+pip install opencv-python
+
+# Or install FFmpeg and ensure it's in PATH
+```
+
+#### Backend URL Configuration
+The frontend API endpoint is configured in `frontend/script.js`. Update the `backendUrl` constant if running backend on different host/port.
+
+#### ROI Coordinate System
+- ROI coordinates are normalized (0-1 range) relative to video dimensions
+- Drag mode: Click and drag to select rectangle
+- Center-point mode: Click to set center with configurable dimensions via `roiDimensions`
+
+### Performance Considerations
+- **Frame Sampling**: Default 8 FPS balances accuracy and performance
+- **Large Videos**: Consider reducing `sample_fps` for faster processing
+- **Memory Usage**: Backend processes videos in streaming fashion, not loading entire video into memory
+
+### Testing and Validation
+- Use test interfaces in `frontend/test-*.html` for algorithm validation
+- `frontend/test-batch-analysis.html` for batch processing validation
+- `frontend/test_peak_detection.html` for peak detection algorithm testing
+- Sample videos available in `resource/` directory
+
 ## File Structure Context
 
+### Core Application Files
 - `backend/main.py` - Main FastAPI application and video processing logic
 - `frontend/script.js` - Core frontend interaction logic (1345+ lines)
 - `frontend/styles.css` - VS Code-themed styling
 - `frontend/serve.py` - Development server with no-cache headers
 - `frontend/index.html` - Main application interface
-- `frontend/curve-viewer.html` - Standalone curve analysis interface
-- `frontend/analyze-csv.html` - CSV data analysis interface
+- `serve.py` - Root-level development server (same as frontend/serve.py)
 - `check_syntax.js` - JavaScript syntax validation utility
 - `start-frontend.ps1` - Windows PowerShell frontend server script
+
+### Testing and Analysis Interfaces
+- `frontend/curve-viewer.html` - Standalone curve analysis interface
+- `frontend/analyze-csv.html` - CSV data analysis interface
+- `frontend/test-batch-analysis.html` - Batch processing test interface
+- `frontend/test-curve-data.html` - Curve data testing interface
+- `frontend/test_peak_detection.html` - Peak detection algorithm testing
+- `frontend/test_overlap_fix.html` - Overlap fix validation interface
+- `frontend/test_realtime_updates.html` - Real-time update testing
+- `frontend/test_corrected_logic.html` - Logic correction testing
 
 ### Legacy System (OldFEM)
 - `OldFEM/` - Previous generation HEM Analyzer with screen-capture based analysis
@@ -151,6 +215,9 @@ docker run -p 8421:8421 hem-analyzer
 - `threshold_delta`: Threshold detection offset
 - `threshold_hold`: Minimum duration for threshold detection
 - `relative_delta`: Relative detection threshold
+
+### Parameter Configuration Location
+Algorithm parameters are configured in `backend/main.py` in the `detect_events()` function. Default values can be adjusted based on medical requirements and video characteristics.
 
 ## Legacy System (OldFEM)
 

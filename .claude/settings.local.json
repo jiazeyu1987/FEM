@@ -9,7 +9,9 @@
       "Bash(node:*)",
       "Bash(\"D:/ProjectPackage/FEM/frontend/script.js.tmp\")",
       "Bash(findstr:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(curl:*)",
+      "Bash(netstat:*)"
     ],
     "deny": [],
     "ask": []
